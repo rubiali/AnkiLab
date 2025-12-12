@@ -1,25 +1,126 @@
+"""
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                                                                               ║
+║                         🧠 ANKILAB — COGNITIVE FLASHCARD ENGINE               ║
+║                                                                               ║
+║  Tema: NEURO / COGNITIVE LAB                                                  ║
+║  Layout completamente reconstruído para transmitir:                           ║
+║  • Laboratório cognitivo                                                      ║
+║  • Ciência da memória                                                         ║
+║  • Aprendizado profundo                                                       ║
+║  • Precisão, controle e inteligência                                          ║
+║                                                                               ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+
+ESTRUTURA DO LAYOUT:
+────────────────────
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  HEADER: Logo + Título + Indicador de Status Global                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌─────────────────────────┐    ┌─────────────────────────────────────────┐ │
+│  │                         │    │                                         │ │
+│  │   PAINEL ESQUERDO       │    │   PAINEL DIREITO                        │ │
+│  │   ─────────────────     │    │   ──────────────                        │ │
+│  │   • Área de entrada     │    │   • Métricas (cards, score médio)       │ │
+│  │   • Contador tokens     │    │   • Preview dos flashcards              │ │
+│  │   • Controle quantidade │    │   • Destaque visual Q/A/Score           │ │
+│  │                         │    │                                         │ │
+│  └─────────────────────────┘    └─────────────────────────────────────────┘ │
+│                                                                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  PAINEL DE OPÇÕES AVANÇADAS: Hard Mode | Refinamento | Configurações        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  BARRA DE AÇÕES: [Gerar] [Exportar] [Copiar] [Limpar]                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  FOOTER: Status detalhado | Modo ativo | Versão                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+"""
+
 import os
 import re
 import threading
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog, simpledialog
+from tkinter import ttk, messagebox, filedialog
 from openai import OpenAI
 import genanki
 
-# =========================
-# VALIDAÇÃO INICIAL
-# =========================
+
+# ╔═══════════════════════════════════════════════════════════════════════════════╗
+# ║  PALETA DE CORES — NEURO / COGNITIVE LAB                                      ║
+# ╚═══════════════════════════════════════════════════════════════════════════════╝
+
+class NeuroTheme:
+    """
+    Sistema de cores centralizado para o tema Neuro/Cognitive Lab.
+    Grafite escuro com acentos em ciano neural e roxo suave.
+    """
+    # ── Fundos ──────────────────────────────────────────────────────────────────
+    BG_MAIN = "#0f1419"           # Fundo principal (azul petróleo escuro)
+    BG_SECONDARY = "#1a1f26"      # Superfícies secundárias
+    BG_TERTIARY = "#242b35"       # Cards e painéis elevados
+    BG_INPUT = "#1e252e"          # Campos de entrada
+    BG_HOVER = "#2a3441"          # Hover states
+    
+    # ── Acentos ─────────────────────────────────────────────────────────────────
+    ACCENT_PRIMARY = "#00d4aa"    # Ciano/verde neural (ações principais)
+    ACCENT_SECONDARY = "#9b7dff"  # Roxo suave (scores, destaques)
+    ACCENT_TERTIARY = "#00a3cc"   # Azul ciano (links, info)
+    
+    # ── Textos ──────────────────────────────────────────────────────────────────
+    TEXT_PRIMARY = "#e6edf3"      # Texto principal (branco suave)
+    TEXT_SECONDARY = "#8b949e"    # Texto secundário (cinza médio)
+    TEXT_MUTED = "#484f58"        # Texto desabilitado (cinza escuro)
+    TEXT_INVERSE = "#0f1419"      # Texto sobre fundos claros
+    
+    # ── Semânticas ──────────────────────────────────────────────────────────────
+    SUCCESS = "#3fb950"           # Verde sucesso
+    WARNING = "#d29922"           # Amarelo aviso
+    ERROR = "#f85149"             # Vermelho erro
+    INFO = "#58a6ff"              # Azul informação
+    
+    # ── Bordas e Separadores ────────────────────────────────────────────────────
+    BORDER = "#30363d"            # Bordas sutis
+    BORDER_FOCUS = "#00d4aa"      # Borda com foco
+    SEPARATOR = "#21262d"         # Linhas divisórias
+    
+    # ── Específicos de Flashcards ───────────────────────────────────────────────
+    CARD_Q = "#58a6ff"            # Perguntas (azul claro)
+    CARD_A = "#3fb950"            # Respostas (verde)
+    CARD_SCORE = "#d2a8ff"        # Scores (lilás)
+    CARD_HEADER = "#f0883e"       # Headers de métricas (laranja)
+    
+    # ── Fontes ──────────────────────────────────────────────────────────────────
+    FONT_MONO = ("JetBrains Mono", "Consolas", "Cascadia Code", "Fira Code", "monospace")
+    FONT_UI = ("Segoe UI", "SF Pro Display", "Helvetica Neue", "sans-serif")
+    
+    @classmethod
+    def get_mono_font(cls, size=10, weight="normal"):
+        """Retorna fonte monoespaçada disponível no sistema."""
+        return (cls.FONT_MONO[1], size, weight)
+    
+    @classmethod
+    def get_ui_font(cls, size=10, weight="normal"):
+        """Retorna fonte de UI disponível no sistema."""
+        return (cls.FONT_UI[0], size, weight)
+
+
+# ╔═══════════════════════════════════════════════════════════════════════════════╗
+# ║  VALIDAÇÃO INICIAL                                                            ║
+# ╚═══════════════════════════════════════════════════════════════════════════════╝
+
 def validar_api_key():
+    """Verifica se a API key está configurada nas variáveis de ambiente."""
     key = os.getenv("OPENAI_API_KEY")
     if not key:
         root = tk.Tk()
         root.withdraw()
         messagebox.showerror(
-            "API Key não encontrada",
-            "Defina a variável de ambiente OPENAI_API_KEY antes de executar o aplicativo.\n\n"
-            "Windows (CMD): set OPENAI_API_KEY=sua_chave\n"
-            "Windows (PowerShell): $env:OPENAI_API_KEY='sua_chave'\n"
-            "Linux/Mac: export OPENAI_API_KEY=sua_chave"
+            "🔑 API Key Não Encontrada",
+            "Defina a variável de ambiente OPENAI_API_KEY.\n\n"
+            "Windows (CMD):\n  set OPENAI_API_KEY=sua_chave\n\n"
+            "Windows (PowerShell):\n  $env:OPENAI_API_KEY='sua_chave'\n\n"
+            "Linux/Mac:\n  export OPENAI_API_KEY=sua_chave"
         )
         return None
     return key
@@ -29,17 +130,22 @@ api_key = validar_api_key()
 if not api_key:
     raise SystemExit(1)
 
-# =========================
-# OPENAI CLIENT
-# =========================
+
+# ╔═══════════════════════════════════════════════════════════════════════════════╗
+# ║  CONFIGURAÇÕES GLOBAIS                                                        ║
+# ╚═══════════════════════════════════════════════════════════════════════════════╝
+
 client = OpenAI(api_key=api_key)
-
 MODEL_NAME = "gpt-4.1-mini"
-APP_VERSION = "v1.4"
+APP_VERSION = "v2.0"
+APP_NAME = "AnkiLab"
+APP_TAGLINE = "Cognitive Flashcard Engine"
 
-# =========================
-# PROMPTS
-# =========================
+
+# ╔═══════════════════════════════════════════════════════════════════════════════╗
+# ║  PROMPTS (mantidos da versão original)                                        ║
+# ╚═══════════════════════════════════════════════════════════════════════════════╝
+
 PROMPT_NORMAL = """
 Você é um especialista em aprendizagem, ciência cognitiva e sistemas de repetição espaçada (Anki).
 
@@ -248,10 +354,13 @@ CARTÕES PARA REFINAR
 {CARDS}
 """
 
-# =========================
-# PARSING / SCORING
-# =========================
+
+# ╔═══════════════════════════════════════════════════════════════════════════════╗
+# ║  FUNÇÕES DE PARSING E SCORING (mantidas da versão original)                   ║
+# ╚═══════════════════════════════════════════════════════════════════════════════╝
+
 def parse_cards(raw: str):
+    """Parse da resposta da API para extrair flashcards no formato Q/A."""
     if not raw:
         return []
     
@@ -349,6 +458,7 @@ def parse_cards(raw: str):
 
 
 def word_count(s: str) -> int:
+    """Conta palavras em uma string."""
     s = re.sub(r"\s+", " ", s).strip()
     if not s:
         return 0
@@ -356,6 +466,7 @@ def word_count(s: str) -> int:
 
 
 def score_card(q: str, a: str, hard: bool) -> float:
+    """Calcula score de qualidade para um flashcard."""
     q_l = q.lower().strip()
     a_l = a.lower().strip()
 
@@ -411,27 +522,6 @@ def score_card(q: str, a: str, hard: bool) -> float:
     return round(score, 1)
 
 
-def format_cards_for_preview(cards, hard: bool):
-    if not cards:
-        return ""
-
-    scores = [score_card(c["q"], c["a"], hard) for c in cards]
-    avg = round(sum(scores) / len(scores), 1) if scores else 0.0
-
-    out_lines = []
-    out_lines.append(f"📊 Média de qualidade: {avg}/10  •  Cards: {len(cards)}")
-    out_lines.append("")
-
-    for i, c in enumerate(cards):
-        sc = scores[i]
-        out_lines.append(f"[Score: {sc}/10]")
-        out_lines.append(f"Q: {c['q']}")
-        out_lines.append(f"A: {c['a']}")
-        out_lines.append("")
-
-    return "\n".join(out_lines).rstrip() + "\n"
-
-
 def format_cards_for_export_tab(cards):
     """Formato tabulado: Frente<TAB>Verso (funciona para Anki .txt e Noji)"""
     lines = []
@@ -441,6 +531,7 @@ def format_cards_for_export_tab(cards):
 
 
 def format_cards_for_refine(cards):
+    """Formata cards para envio ao prompt de refinamento."""
     lines = []
     for c in cards:
         lines.append(f"Q: {c['q']}")
@@ -449,269 +540,1147 @@ def format_cards_for_refine(cards):
     return "\n".join(lines).strip()
 
 
-# =========================
-# DIALOG DE EXPORTAÇÃO
-# =========================
-class ExportDialog(tk.Toplevel):
-    def __init__(self, parent, num_cards):
-        super().__init__(parent)
-        self.title("Exportar Flashcards")
-        self.geometry("420x280")
-        self.resizable(False, False)
-        self.transient(parent)
-        self.grab_set()
-        
-        self.result = None
-        self.deck_name = "Flashcards Gerados"
-        
-        # Centraliza
-        self.update_idletasks()
-        x = parent.winfo_x() + (parent.winfo_width() // 2) - (420 // 2)
-        y = parent.winfo_y() + (parent.winfo_height() // 2) - (280 // 2)
-        self.geometry(f"+{x}+{y}")
-        
-        # Frame principal
-        frame = ttk.Frame(self, padding=20)
-        frame.pack(fill="both", expand=True)
-        
-        # Info
-        ttk.Label(
-            frame, 
-            text=f"📦 {num_cards} flashcard(s) prontos para exportar",
-            font=("Segoe UI", 11, "bold")
-        ).pack(pady=(0, 15))
-        
-        # Escolha do formato
-        ttk.Label(frame, text="Escolha o formato de exportação:").pack(anchor="w")
-        
-        self.formato_var = tk.StringVar(value="anki_apkg")
-        
-        formatos_frame = ttk.Frame(frame)
-        formatos_frame.pack(fill="x", pady=10)
-        
-        ttk.Radiobutton(
-            formatos_frame, 
-            text="📗 Anki (.apkg) - Pacote nativo", 
-            variable=self.formato_var, 
-            value="anki_apkg",
-            command=self.toggle_deck_name
-        ).pack(anchor="w", pady=2)
-        
-        ttk.Radiobutton(
-            formatos_frame, 
-            text="📄 Anki (.txt) - Texto tabulado", 
-            variable=self.formato_var, 
-            value="anki_txt",
-            command=self.toggle_deck_name
-        ).pack(anchor="w", pady=2)
-        
-        ttk.Radiobutton(
-            formatos_frame, 
-            text="🟣 Noji (.txt) - Texto tabulado", 
-            variable=self.formato_var, 
-            value="noji_txt",
-            command=self.toggle_deck_name
-        ).pack(anchor="w", pady=2)
-        
-        # Nome do deck (só para .apkg)
-        self.deck_frame = ttk.Frame(frame)
-        self.deck_frame.pack(fill="x", pady=(10, 5))
-        
-        ttk.Label(self.deck_frame, text="Nome do Deck:").pack(anchor="w")
-        self.deck_entry = ttk.Entry(self.deck_frame, width=45)
-        self.deck_entry.insert(0, "Flashcards Gerados")
-        self.deck_entry.pack(fill="x", pady=(2, 0))
-        
-        # Botões
-        btn_frame = ttk.Frame(frame)
-        btn_frame.pack(fill="x", pady=(15, 0))
-        
-        ttk.Button(btn_frame, text="Cancelar", command=self.cancelar, width=12).pack(side="right", padx=(5, 0))
-        ttk.Button(btn_frame, text="Exportar", command=self.exportar, width=12).pack(side="right")
+# ╔═══════════════════════════════════════════════════════════════════════════════╗
+# ║  CLASSE PRINCIPAL DA APLICAÇÃO — AnkiLabApp                                   ║
+# ╚═══════════════════════════════════════════════════════════════════════════════╝
+
+class AnkiLabApp:
+    """
+    Aplicação principal do AnkiLab com tema NEURO / COGNITIVE LAB.
     
-    def toggle_deck_name(self):
-        """Mostra/esconde campo de nome do deck conforme formato"""
-        if self.formato_var.get() == "anki_apkg":
-            self.deck_entry.config(state="normal")
-        else:
-            self.deck_entry.config(state="disabled")
+    A interface é dividida em seções claras:
+    - Header: identidade visual e status global
+    - Painel Esquerdo: entrada de texto e configurações
+    - Painel Direito: preview e métricas dos flashcards
+    - Painel de Opções: controles avançados (Hard Mode, Refinamento)
+    - Footer: status detalhado e informações do sistema
+    """
     
-    def exportar(self):
-        self.deck_name = self.deck_entry.get().strip() or "Flashcards Gerados"
-        self.result = self.formato_var.get()
-        self.destroy()
+    def __init__(self, root):
+        self.root = root
+        self.theme = NeuroTheme
+        self.cards_data = []  # Armazena os cards gerados
+        
+        # ── Configuração da janela principal ────────────────────────────────────
+        self.root.title(f"{APP_NAME} • {APP_TAGLINE}")
+        self.root.geometry("1280x820")
+        self.root.minsize(1024, 700)
+        self.root.configure(bg=self.theme.BG_MAIN)
+        
+        # ── Variáveis de controle ───────────────────────────────────────────────
+        self.qtd_var = tk.StringVar(value="AUTO")
+        self.hard_var = tk.BooleanVar(value=False)
+        self.refine_var = tk.BooleanVar(value=False)
+        self.cards_count_var = tk.StringVar(value="0")
+        self.avg_score_var = tk.StringVar(value="—")
+        
+        # ── Configurar estilos ttk ──────────────────────────────────────────────
+        self._configure_styles()
+        
+        # ── Construir interface ─────────────────────────────────────────────────
+        self._build_header()
+        self._build_main_content()
+        self._build_options_panel()
+        self._build_actions_bar()
+        self._build_footer()
+        
+        # ── Inicialização ───────────────────────────────────────────────────────
+        self._update_char_counter()
     
-    def cancelar(self):
-        self.result = None
-        self.destroy()
-
-
-# =========================
-# FUNÇÕES UI
-# =========================
-def atualizar_contador(event=None):
-    texto = text_input.get("1.0", tk.END).strip()
-    chars = len(texto)
-    tokens_est = chars // 4
-    contador_label.config(text=f"{chars:,} caracteres  •  ~{tokens_est:,} tokens")
-
-
-def inserir_preview_formatado(texto: str):
-    preview.config(state="normal")
-    preview.delete("1.0", tk.END)
-
-    for linha in texto.split("\n"):
-        s = linha.strip()
-        if s.startswith("📊"):
-            preview.insert(tk.END, linha + "\n", "header")
-        elif s.startswith("[Score:"):
-            preview.insert(tk.END, linha + "\n", "score")
-        elif s.startswith("Q:"):
-            preview.insert(tk.END, linha + "\n", "pergunta")
-        elif s.startswith("A:"):
-            preview.insert(tk.END, linha + "\n", "resposta")
-        else:
-            preview.insert(tk.END, linha + "\n")
-
-    preview.config(state="disabled")
-
-
-def set_busy(is_busy: bool, msg: str = ""):
-    if is_busy:
-        btn_gerar.config(state="disabled")
-        btn_exportar.config(state="disabled")
-        btn_copiar.config(state="disabled")
-        btn_limpar.config(state="disabled")
-        if msg:
-            status_label.config(text=msg)
-    else:
-        btn_gerar.config(state="normal")
-        btn_exportar.config(state="normal")
-        btn_copiar.config(state="normal")
-        btn_limpar.config(state="normal")
-
-
-def atualizar_status(msg: str):
-    root.after(0, lambda: status_label.config(text=msg))
-
-
-def gerar_cards():
-    texto = text_input.get("1.0", tk.END).strip()
-    if not texto:
-        messagebox.showerror("Erro", "Insira um texto para análise.")
-        return
-
-    hard = bool(hard_var.get())
-    do_refine = bool(refine_var.get())
-
-    set_busy(True, "⏳ Gerando flashcards... aguarde.")
-    preview.config(state="normal")
-    preview.delete("1.0", tk.END)
-    preview.insert(tk.END, "⏳ Processando sua solicitação...\n\nIsso pode levar alguns segundos.")
-    preview.config(state="disabled")
-
-    def chamar_api():
-        try:
-            qtd = qtd_var.get().strip().upper()
-            modo = "AUTOMÁTICO" if qtd == "AUTO" else "MANUAL"
-
-            base_prompt = PROMPT_HARD if hard else PROMPT_NORMAL
-            prompt = base_prompt.format(MODO=modo, QTD=qtd, TEXTO=texto)
-
-            atualizar_status("⏳ Gerando flashcards (1ª passada)...")
-            
-            resp1 = client.chat.completions.create(
-                model=MODEL_NAME,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.4
+    # ═══════════════════════════════════════════════════════════════════════════
+    #  CONFIGURAÇÃO DE ESTILOS TTK
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    def _configure_styles(self):
+        """Configura todos os estilos ttk para o tema Neuro."""
+        style = ttk.Style()
+        
+        # ── Estilo dos botões principais (ação) ─────────────────────────────────
+        style.configure(
+            "Action.TButton",
+            font=self.theme.get_ui_font(10, "bold"),
+            padding=(16, 10),
+            background=self.theme.ACCENT_PRIMARY,
+            foreground=self.theme.TEXT_INVERSE
+        )
+        
+        # ── Estilo dos botões secundários ───────────────────────────────────────
+        style.configure(
+            "Secondary.TButton",
+            font=self.theme.get_ui_font(10),
+            padding=(14, 8),
+            background=self.theme.BG_TERTIARY
+        )
+        
+        # ── Estilo dos checkbuttons ─────────────────────────────────────────────
+        style.configure(
+            "Neuro.TCheckbutton",
+            font=self.theme.get_ui_font(10),
+            background=self.theme.BG_SECONDARY,
+            foreground=self.theme.TEXT_PRIMARY
+        )
+        
+        # ── Estilo dos labels ───────────────────────────────────────────────────
+        style.configure(
+            "Neuro.TLabel",
+            font=self.theme.get_ui_font(10),
+            background=self.theme.BG_MAIN,
+            foreground=self.theme.TEXT_PRIMARY
+        )
+        
+        style.configure(
+            "NeuroSecondary.TLabel",
+            font=self.theme.get_ui_font(9),
+            background=self.theme.BG_MAIN,
+            foreground=self.theme.TEXT_SECONDARY
+        )
+        
+        style.configure(
+            "NeuroMuted.TLabel",
+            font=self.theme.get_ui_font(9),
+            background=self.theme.BG_MAIN,
+            foreground=self.theme.TEXT_MUTED
+        )
+        
+        # ── Estilo do Entry ─────────────────────────────────────────────────────
+        style.configure(
+            "Neuro.TEntry",
+            fieldbackground=self.theme.BG_INPUT,
+            foreground=self.theme.TEXT_PRIMARY,
+            insertcolor=self.theme.ACCENT_PRIMARY
+        )
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    #  HEADER — Identidade visual e status global
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    def _build_header(self):
+        """
+        Constrói o cabeçalho com:
+        - Logo/título do aplicativo
+        - Tagline
+        - Indicador de modelo ativo
+        """
+        header = tk.Frame(self.root, bg=self.theme.BG_SECONDARY, height=70)
+        header.pack(fill="x", side="top")
+        header.pack_propagate(False)
+        
+        # ── Container interno com padding ───────────────────────────────────────
+        header_inner = tk.Frame(header, bg=self.theme.BG_SECONDARY)
+        header_inner.pack(fill="both", expand=True, padx=24, pady=12)
+        
+        # ── Lado esquerdo: Logo e título ────────────────────────────────────────
+        left_frame = tk.Frame(header_inner, bg=self.theme.BG_SECONDARY)
+        left_frame.pack(side="left", fill="y")
+        
+        # Ícone neural (emoji)
+        logo_label = tk.Label(
+            left_frame,
+            text="🧠",
+            font=("Segoe UI Emoji", 28),
+            bg=self.theme.BG_SECONDARY,
+            fg=self.theme.TEXT_PRIMARY
+        )
+        logo_label.pack(side="left", padx=(0, 12))
+        
+        # Título e tagline
+        title_frame = tk.Frame(left_frame, bg=self.theme.BG_SECONDARY)
+        title_frame.pack(side="left", fill="y")
+        
+        title_label = tk.Label(
+            title_frame,
+            text=APP_NAME,
+            font=self.theme.get_ui_font(18, "bold"),
+            bg=self.theme.BG_SECONDARY,
+            fg=self.theme.TEXT_PRIMARY
+        )
+        title_label.pack(anchor="w")
+        
+        tagline_label = tk.Label(
+            title_frame,
+            text=APP_TAGLINE,
+            font=self.theme.get_ui_font(10),
+            bg=self.theme.BG_SECONDARY,
+            fg=self.theme.TEXT_SECONDARY
+        )
+        tagline_label.pack(anchor="w")
+        
+        # ── Lado direito: Status do modelo ──────────────────────────────────────
+        right_frame = tk.Frame(header_inner, bg=self.theme.BG_SECONDARY)
+        right_frame.pack(side="right", fill="y")
+        
+        # Badge do modelo
+        model_frame = tk.Frame(
+            right_frame,
+            bg=self.theme.BG_TERTIARY,
+            padx=12,
+            pady=6
+        )
+        model_frame.pack(side="right")
+        
+        model_icon = tk.Label(
+            model_frame,
+            text="⚡",
+            font=("Segoe UI Emoji", 11),
+            bg=self.theme.BG_TERTIARY,
+            fg=self.theme.ACCENT_PRIMARY
+        )
+        model_icon.pack(side="left", padx=(0, 6))
+        
+        model_label = tk.Label(
+            model_frame,
+            text=MODEL_NAME,
+            font=self.theme.get_mono_font(10),
+            bg=self.theme.BG_TERTIARY,
+            fg=self.theme.TEXT_PRIMARY
+        )
+        model_label.pack(side="left")
+        
+        # Separador visual abaixo do header
+        separator = tk.Frame(self.root, bg=self.theme.BORDER, height=1)
+        separator.pack(fill="x", side="top")
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    #  MAIN CONTENT — Painéis esquerdo e direito
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    def _build_main_content(self):
+        """
+        Constrói a área principal dividida em dois painéis:
+        - Esquerdo: entrada de texto + controles
+        - Direito: preview dos flashcards + métricas
+        """
+        # ── Container principal ─────────────────────────────────────────────────
+        main_container = tk.Frame(self.root, bg=self.theme.BG_MAIN)
+        main_container.pack(fill="both", expand=True, padx=16, pady=16)
+        
+        # Configura grid com duas colunas (proporção 45% / 55%)
+        main_container.grid_columnconfigure(0, weight=45, minsize=400)
+        main_container.grid_columnconfigure(1, weight=55, minsize=450)
+        main_container.grid_rowconfigure(0, weight=1)
+        
+        # ── Painel Esquerdo ─────────────────────────────────────────────────────
+        self._build_left_panel(main_container)
+        
+        # ── Painel Direito ──────────────────────────────────────────────────────
+        self._build_right_panel(main_container)
+    
+    def _build_left_panel(self, parent):
+        """
+        Painel esquerdo: entrada de texto e controles de quantidade.
+        """
+        left_panel = tk.Frame(parent, bg=self.theme.BG_SECONDARY)
+        left_panel.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
+        
+        # ── Header do painel ────────────────────────────────────────────────────
+        panel_header = tk.Frame(left_panel, bg=self.theme.BG_TERTIARY, height=48)
+        panel_header.pack(fill="x", side="top")
+        panel_header.pack_propagate(False)
+        
+        header_content = tk.Frame(panel_header, bg=self.theme.BG_TERTIARY)
+        header_content.pack(fill="both", expand=True, padx=16, pady=10)
+        
+        # Ícone e título
+        tk.Label(
+            header_content,
+            text="📝",
+            font=("Segoe UI Emoji", 14),
+            bg=self.theme.BG_TERTIARY,
+            fg=self.theme.TEXT_PRIMARY
+        ).pack(side="left", padx=(0, 8))
+        
+        tk.Label(
+            header_content,
+            text="ENTRADA DE TEXTO",
+            font=self.theme.get_ui_font(11, "bold"),
+            bg=self.theme.BG_TERTIARY,
+            fg=self.theme.TEXT_PRIMARY
+        ).pack(side="left")
+        
+        # ── Área de texto ───────────────────────────────────────────────────────
+        text_frame = tk.Frame(left_panel, bg=self.theme.BG_SECONDARY, padx=16, pady=12)
+        text_frame.pack(fill="both", expand=True)
+        
+        # Label de instrução
+        instruction_label = tk.Label(
+            text_frame,
+            text="Cole ou digite o conteúdo para análise:",
+            font=self.theme.get_ui_font(9),
+            bg=self.theme.BG_SECONDARY,
+            fg=self.theme.TEXT_SECONDARY,
+            anchor="w"
+        )
+        instruction_label.pack(fill="x", pady=(0, 8))
+        
+        # Frame do texto com borda
+        text_border = tk.Frame(
+            text_frame,
+            bg=self.theme.BORDER,
+            padx=1,
+            pady=1
+        )
+        text_border.pack(fill="both", expand=True)
+        
+        # Widget de texto
+        self.text_input = tk.Text(
+            text_border,
+            wrap="word",
+            font=self.theme.get_mono_font(10),
+            bg=self.theme.BG_INPUT,
+            fg=self.theme.TEXT_PRIMARY,
+            insertbackground=self.theme.ACCENT_PRIMARY,
+            selectbackground=self.theme.ACCENT_PRIMARY,
+            selectforeground=self.theme.BG_MAIN,
+            relief="flat",
+            padx=12,
+            pady=10,
+            highlightthickness=0
+        )
+        self.text_input.pack(fill="both", expand=True)
+        self.text_input.bind("<KeyRelease>", self._update_char_counter)
+        self.text_input.bind("<FocusIn>", lambda e: text_border.config(bg=self.theme.BORDER_FOCUS))
+        self.text_input.bind("<FocusOut>", lambda e: text_border.config(bg=self.theme.BORDER))
+        
+        # ── Barra inferior: contador e quantidade ───────────────────────────────
+        bottom_bar = tk.Frame(left_panel, bg=self.theme.BG_TERTIARY, height=50)
+        bottom_bar.pack(fill="x", side="bottom")
+        bottom_bar.pack_propagate(False)
+        
+        bottom_content = tk.Frame(bottom_bar, bg=self.theme.BG_TERTIARY)
+        bottom_content.pack(fill="both", expand=True, padx=16, pady=8)
+        
+        # Contador de caracteres/tokens (esquerda)
+        counter_frame = tk.Frame(bottom_content, bg=self.theme.BG_TERTIARY)
+        counter_frame.pack(side="left", fill="y")
+        
+        self.char_counter_label = tk.Label(
+            counter_frame,
+            text="0 caracteres",
+            font=self.theme.get_mono_font(9),
+            bg=self.theme.BG_TERTIARY,
+            fg=self.theme.TEXT_SECONDARY
+        )
+        self.char_counter_label.pack(side="left")
+        
+        tk.Label(
+            counter_frame,
+            text="  •  ",
+            font=self.theme.get_ui_font(9),
+            bg=self.theme.BG_TERTIARY,
+            fg=self.theme.TEXT_MUTED
+        ).pack(side="left")
+        
+        self.token_counter_label = tk.Label(
+            counter_frame,
+            text="~0 tokens",
+            font=self.theme.get_mono_font(9),
+            bg=self.theme.BG_TERTIARY,
+            fg=self.theme.TEXT_SECONDARY
+        )
+        self.token_counter_label.pack(side="left")
+        
+        # Controle de quantidade (direita)
+        qtd_frame = tk.Frame(bottom_content, bg=self.theme.BG_TERTIARY)
+        qtd_frame.pack(side="right", fill="y")
+        
+        tk.Label(
+            qtd_frame,
+            text="Cards:",
+            font=self.theme.get_ui_font(9),
+            bg=self.theme.BG_TERTIARY,
+            fg=self.theme.TEXT_SECONDARY
+        ).pack(side="left", padx=(0, 6))
+        
+        self.qtd_entry = tk.Entry(
+            qtd_frame,
+            textvariable=self.qtd_var,
+            font=self.theme.get_mono_font(10),
+            bg=self.theme.BG_INPUT,
+            fg=self.theme.ACCENT_PRIMARY,
+            insertbackground=self.theme.ACCENT_PRIMARY,
+            relief="flat",
+            width=8,
+            justify="center",
+            highlightthickness=1,
+            highlightbackground=self.theme.BORDER,
+            highlightcolor=self.theme.BORDER_FOCUS
+        )
+        self.qtd_entry.pack(side="left", padx=(0, 6))
+        
+        tk.Label(
+            qtd_frame,
+            text="(n° ou AUTO)",
+            font=self.theme.get_ui_font(8),
+            bg=self.theme.BG_TERTIARY,
+            fg=self.theme.TEXT_MUTED
+        ).pack(side="left")
+    
+    def _build_right_panel(self, parent):
+        """
+        Painel direito: métricas e preview dos flashcards.
+        """
+        right_panel = tk.Frame(parent, bg=self.theme.BG_SECONDARY)
+        right_panel.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
+        
+        # ── Header do painel com métricas ───────────────────────────────────────
+        panel_header = tk.Frame(right_panel, bg=self.theme.BG_TERTIARY, height=48)
+        panel_header.pack(fill="x", side="top")
+        panel_header.pack_propagate(False)
+        
+        header_content = tk.Frame(panel_header, bg=self.theme.BG_TERTIARY)
+        header_content.pack(fill="both", expand=True, padx=16, pady=10)
+        
+        # Ícone e título (esquerda)
+        title_frame = tk.Frame(header_content, bg=self.theme.BG_TERTIARY)
+        title_frame.pack(side="left", fill="y")
+        
+        tk.Label(
+            title_frame,
+            text="🎴",
+            font=("Segoe UI Emoji", 14),
+            bg=self.theme.BG_TERTIARY,
+            fg=self.theme.TEXT_PRIMARY
+        ).pack(side="left", padx=(0, 8))
+        
+        tk.Label(
+            title_frame,
+            text="FLASHCARDS GERADOS",
+            font=self.theme.get_ui_font(11, "bold"),
+            bg=self.theme.BG_TERTIARY,
+            fg=self.theme.TEXT_PRIMARY
+        ).pack(side="left")
+        
+        # Métricas (direita)
+        metrics_frame = tk.Frame(header_content, bg=self.theme.BG_TERTIARY)
+        metrics_frame.pack(side="right", fill="y")
+        
+        # Badge de contagem
+        count_badge = tk.Frame(
+            metrics_frame,
+            bg=self.theme.BG_MAIN,
+            padx=10,
+            pady=4
+        )
+        count_badge.pack(side="left", padx=(0, 12))
+        
+        self.cards_count_label = tk.Label(
+            count_badge,
+            textvariable=self.cards_count_var,
+            font=self.theme.get_mono_font(11, "bold"),
+            bg=self.theme.BG_MAIN,
+            fg=self.theme.ACCENT_PRIMARY
+        )
+        self.cards_count_label.pack(side="left")
+        
+        tk.Label(
+            count_badge,
+            text=" cards",
+            font=self.theme.get_ui_font(9),
+            bg=self.theme.BG_MAIN,
+            fg=self.theme.TEXT_SECONDARY
+        ).pack(side="left")
+        
+        # Badge de score médio
+        score_badge = tk.Frame(
+            metrics_frame,
+            bg=self.theme.BG_MAIN,
+            padx=10,
+            pady=4
+        )
+        score_badge.pack(side="left")
+        
+        tk.Label(
+            score_badge,
+            text="Score: ",
+            font=self.theme.get_ui_font(9),
+            bg=self.theme.BG_MAIN,
+            fg=self.theme.TEXT_SECONDARY
+        ).pack(side="left")
+        
+        self.avg_score_label = tk.Label(
+            score_badge,
+            textvariable=self.avg_score_var,
+            font=self.theme.get_mono_font(11, "bold"),
+            bg=self.theme.BG_MAIN,
+            fg=self.theme.ACCENT_SECONDARY
+        )
+        self.avg_score_label.pack(side="left")
+        
+        tk.Label(
+            score_badge,
+            text="/10",
+            font=self.theme.get_ui_font(9),
+            bg=self.theme.BG_MAIN,
+            fg=self.theme.TEXT_MUTED
+        ).pack(side="left")
+        
+        # ── Área de preview ─────────────────────────────────────────────────────
+        preview_frame = tk.Frame(right_panel, bg=self.theme.BG_SECONDARY, padx=16, pady=12)
+        preview_frame.pack(fill="both", expand=True)
+        
+        # Frame do preview com borda
+        preview_border = tk.Frame(
+            preview_frame,
+            bg=self.theme.BORDER,
+            padx=1,
+            pady=1
+        )
+        preview_border.pack(fill="both", expand=True)
+        
+        # Container para texto + scrollbar
+        preview_container = tk.Frame(preview_border, bg=self.theme.BG_INPUT)
+        preview_container.pack(fill="both", expand=True)
+        
+        # Scrollbar customizada
+        scrollbar = tk.Scrollbar(
+            preview_container,
+            orient="vertical",
+            bg=self.theme.BG_TERTIARY,
+            troughcolor=self.theme.BG_INPUT,
+            activebackground=self.theme.ACCENT_PRIMARY,
+            highlightthickness=0
+        )
+        scrollbar.pack(side="right", fill="y")
+        
+        # Widget de texto para preview
+        self.preview = tk.Text(
+            preview_container,
+            wrap="word",
+            font=self.theme.get_mono_font(10),
+            bg=self.theme.BG_INPUT,
+            fg=self.theme.TEXT_PRIMARY,
+            relief="flat",
+            padx=14,
+            pady=12,
+            highlightthickness=0,
+            yscrollcommand=scrollbar.set,
+            state="disabled",
+            cursor="arrow"
+        )
+        self.preview.pack(fill="both", expand=True, side="left")
+        scrollbar.config(command=self.preview.yview)
+        
+        # ── Configurar tags de formatação ───────────────────────────────────────
+        self.preview.tag_configure(
+            "header",
+            foreground=self.theme.CARD_HEADER,
+            font=self.theme.get_mono_font(10, "bold")
+        )
+        self.preview.tag_configure(
+            "score",
+            foreground=self.theme.CARD_SCORE,
+            font=self.theme.get_mono_font(9, "bold")
+        )
+        self.preview.tag_configure(
+            "pergunta",
+            foreground=self.theme.CARD_Q,
+            font=self.theme.get_mono_font(10, "bold")
+        )
+        self.preview.tag_configure(
+            "resposta",
+            foreground=self.theme.CARD_A,
+            font=self.theme.get_mono_font(10)
+        )
+        self.preview.tag_configure(
+            "separator",
+            foreground=self.theme.TEXT_MUTED,
+            font=self.theme.get_mono_font(8)
+        )
+        self.preview.tag_configure(
+            "processing",
+            foreground=self.theme.ACCENT_PRIMARY,
+            font=self.theme.get_mono_font(10),
+            justify="center"
+        )
+        self.preview.tag_configure(
+            "error",
+            foreground=self.theme.ERROR,
+            font=self.theme.get_mono_font(10)
+        )
+        
+        # Mensagem inicial
+        self._show_preview_placeholder()
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    #  OPTIONS PANEL — Controles avançados
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    def _build_options_panel(self):
+        """
+        Painel de opções avançadas: Hard Mode e Refinamento.
+        """
+        options_container = tk.Frame(self.root, bg=self.theme.BG_MAIN)
+        options_container.pack(fill="x", padx=16, pady=(0, 8))
+        
+        # ── Painel interno ──────────────────────────────────────────────────────
+        options_panel = tk.Frame(options_container, bg=self.theme.BG_SECONDARY)
+        options_panel.pack(fill="x")
+        
+        options_content = tk.Frame(options_panel, bg=self.theme.BG_SECONDARY)
+        options_content.pack(fill="x", padx=20, pady=14)
+        
+        # ── Título da seção ─────────────────────────────────────────────────────
+        title_frame = tk.Frame(options_content, bg=self.theme.BG_SECONDARY)
+        title_frame.pack(side="left", fill="y")
+        
+        tk.Label(
+            title_frame,
+            text="⚙️",
+            font=("Segoe UI Emoji", 12),
+            bg=self.theme.BG_SECONDARY,
+            fg=self.theme.TEXT_SECONDARY
+        ).pack(side="left", padx=(0, 8))
+        
+        tk.Label(
+            title_frame,
+            text="CONFIGURAÇÕES AVANÇADAS",
+            font=self.theme.get_ui_font(10, "bold"),
+            bg=self.theme.BG_SECONDARY,
+            fg=self.theme.TEXT_SECONDARY
+        ).pack(side="left")
+        
+        # ── Separador vertical ──────────────────────────────────────────────────
+        tk.Frame(
+            options_content,
+            bg=self.theme.BORDER,
+            width=1
+        ).pack(side="left", fill="y", padx=24)
+        
+        # ── Checkbox Hard Mode ──────────────────────────────────────────────────
+        hard_frame = tk.Frame(options_content, bg=self.theme.BG_SECONDARY)
+        hard_frame.pack(side="left", fill="y", padx=(0, 20))
+        
+        self.hard_check = tk.Checkbutton(
+            hard_frame,
+            variable=self.hard_var,
+            bg=self.theme.BG_SECONDARY,
+            fg=self.theme.TEXT_PRIMARY,
+            activebackground=self.theme.BG_SECONDARY,
+            activeforeground=self.theme.TEXT_PRIMARY,
+            selectcolor=self.theme.BG_INPUT,
+            highlightthickness=0,
+            bd=0,
+            command=self._update_mode_display
+        )
+        self.hard_check.pack(side="left")
+        
+        hard_label_frame = tk.Frame(hard_frame, bg=self.theme.BG_SECONDARY)
+        hard_label_frame.pack(side="left", fill="y")
+        
+        hard_title = tk.Label(
+            hard_label_frame,
+            text="🧠 Hard Mode",
+            font=self.theme.get_ui_font(10, "bold"),
+            bg=self.theme.BG_SECONDARY,
+            fg=self.theme.TEXT_PRIMARY,
+            cursor="hand2"
+        )
+        hard_title.pack(anchor="w")
+        hard_title.bind("<Button-1>", lambda e: self.hard_var.set(not self.hard_var.get()) or self._update_mode_display())
+        
+        tk.Label(
+            hard_label_frame,
+            text="Cards mais desafiadores, focados em aplicação",
+            font=self.theme.get_ui_font(8),
+            bg=self.theme.BG_SECONDARY,
+            fg=self.theme.TEXT_MUTED
+        ).pack(anchor="w")
+        
+        # ── Separador vertical ──────────────────────────────────────────────────
+        tk.Frame(
+            options_content,
+            bg=self.theme.BORDER,
+            width=1
+        ).pack(side="left", fill="y", padx=20)
+        
+        # ── Checkbox Refinamento ────────────────────────────────────────────────
+        refine_frame = tk.Frame(options_content, bg=self.theme.BG_SECONDARY)
+        refine_frame.pack(side="left", fill="y")
+        
+        self.refine_check = tk.Checkbutton(
+            refine_frame,
+            variable=self.refine_var,
+            bg=self.theme.BG_SECONDARY,
+            fg=self.theme.TEXT_PRIMARY,
+            activebackground=self.theme.BG_SECONDARY,
+            activeforeground=self.theme.TEXT_PRIMARY,
+            selectcolor=self.theme.BG_INPUT,
+            highlightthickness=0,
+            bd=0
+        )
+        self.refine_check.pack(side="left")
+        
+        refine_label_frame = tk.Frame(refine_frame, bg=self.theme.BG_SECONDARY)
+        refine_label_frame.pack(side="left", fill="y")
+        
+        refine_title = tk.Label(
+            refine_label_frame,
+            text="🔁 Segunda Passada de Refinamento",
+            font=self.theme.get_ui_font(10, "bold"),
+            bg=self.theme.BG_SECONDARY,
+            fg=self.theme.TEXT_PRIMARY,
+            cursor="hand2"
+        )
+        refine_title.pack(anchor="w")
+        refine_title.bind("<Button-1>", lambda e: self.refine_var.set(not self.refine_var.get()))
+        
+        tk.Label(
+            refine_label_frame,
+            text="Revisão automática para eliminar redundâncias",
+            font=self.theme.get_ui_font(8),
+            bg=self.theme.BG_SECONDARY,
+            fg=self.theme.TEXT_MUTED
+        ).pack(anchor="w")
+        
+        # ── Indicador de modo ativo (direita) ───────────────────────────────────
+        self.mode_indicator = tk.Frame(options_content, bg=self.theme.BG_SECONDARY)
+        self.mode_indicator.pack(side="right", fill="y")
+        
+        self.mode_label = tk.Label(
+            self.mode_indicator,
+            text="MODO: NORMAL",
+            font=self.theme.get_mono_font(9, "bold"),
+            bg=self.theme.BG_SECONDARY,
+            fg=self.theme.ACCENT_PRIMARY
+        )
+        self.mode_label.pack(side="right")
+    
+    def _update_mode_display(self):
+        """Atualiza o indicador de modo (Normal/Hard)."""
+        if self.hard_var.get():
+            self.mode_label.config(
+                text="MODO: HARD",
+                fg=self.theme.ERROR
             )
-            raw1 = (resp1.choices[0].message.content or "").strip()
-            cards1 = parse_cards(raw1)
+        else:
+            self.mode_label.config(
+                text="MODO: NORMAL",
+                fg=self.theme.ACCENT_PRIMARY
+            )
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    #  ACTIONS BAR — Botões principais
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    def _build_actions_bar(self):
+        """
+        Barra de ações com os botões principais.
+        """
+        actions_container = tk.Frame(self.root, bg=self.theme.BG_MAIN)
+        actions_container.pack(fill="x", padx=16, pady=(0, 8))
+        
+        # ── Painel interno ──────────────────────────────────────────────────────
+        actions_panel = tk.Frame(actions_container, bg=self.theme.BG_TERTIARY)
+        actions_panel.pack(fill="x")
+        
+        actions_content = tk.Frame(actions_panel, bg=self.theme.BG_TERTIARY)
+        actions_content.pack(fill="x", padx=20, pady=14)
+        
+        # ── Botão principal: Gerar Cards ────────────────────────────────────────
+        self.btn_gerar = tk.Button(
+            actions_content,
+            text="  🚀  GERAR FLASHCARDS  ",
+            font=self.theme.get_ui_font(11, "bold"),
+            bg=self.theme.ACCENT_PRIMARY,
+            fg=self.theme.TEXT_INVERSE,
+            activebackground=self.theme.ACCENT_TERTIARY,
+            activeforeground=self.theme.TEXT_INVERSE,
+            relief="flat",
+            cursor="hand2",
+            padx=20,
+            pady=10,
+            command=self.gerar_cards
+        )
+        self.btn_gerar.pack(side="left", padx=(0, 16))
+        
+        # Efeitos hover
+        self.btn_gerar.bind("<Enter>", lambda e: self.btn_gerar.config(bg=self.theme.ACCENT_TERTIARY))
+        self.btn_gerar.bind("<Leave>", lambda e: self.btn_gerar.config(bg=self.theme.ACCENT_PRIMARY))
+        
+        # ── Separador ───────────────────────────────────────────────────────────
+        tk.Frame(
+            actions_content,
+            bg=self.theme.BORDER,
+            width=1
+        ).pack(side="left", fill="y", padx=16)
+        
+        # ── Botões secundários ──────────────────────────────────────────────────
+        self.btn_exportar = tk.Button(
+            actions_content,
+            text="  💾  Exportar  ",
+            font=self.theme.get_ui_font(10),
+            bg=self.theme.BG_SECONDARY,
+            fg=self.theme.TEXT_PRIMARY,
+            activebackground=self.theme.BG_HOVER,
+            activeforeground=self.theme.TEXT_PRIMARY,
+            relief="flat",
+            cursor="hand2",
+            padx=14,
+            pady=8,
+            command=self.exportar_cards
+        )
+        self.btn_exportar.pack(side="left", padx=(0, 8))
+        self._add_button_hover(self.btn_exportar)
+        
+        self.btn_copiar = tk.Button(
+            actions_content,
+            text="  📋  Copiar  ",
+            font=self.theme.get_ui_font(10),
+            bg=self.theme.BG_SECONDARY,
+            fg=self.theme.TEXT_PRIMARY,
+            activebackground=self.theme.BG_HOVER,
+            activeforeground=self.theme.TEXT_PRIMARY,
+            relief="flat",
+            cursor="hand2",
+            padx=14,
+            pady=8,
+            command=self.copiar_clipboard
+        )
+        self.btn_copiar.pack(side="left", padx=(0, 8))
+        self._add_button_hover(self.btn_copiar)
+        
+        self.btn_limpar = tk.Button(
+            actions_content,
+            text="  🔄  Limpar  ",
+            font=self.theme.get_ui_font(10),
+            bg=self.theme.BG_SECONDARY,
+            fg=self.theme.TEXT_PRIMARY,
+            activebackground=self.theme.BG_HOVER,
+            activeforeground=self.theme.TEXT_PRIMARY,
+            relief="flat",
+            cursor="hand2",
+            padx=14,
+            pady=8,
+            command=self.limpar_tudo
+        )
+        self.btn_limpar.pack(side="left")
+        self._add_button_hover(self.btn_limpar)
+        
+        # ── Atalhos de teclado (lado direito) ───────────────────────────────────
+        shortcuts_frame = tk.Frame(actions_content, bg=self.theme.BG_TERTIARY)
+        shortcuts_frame.pack(side="right", fill="y")
+        
+        tk.Label(
+            shortcuts_frame,
+            text="Ctrl+Enter: Gerar",
+            font=self.theme.get_mono_font(8),
+            bg=self.theme.BG_TERTIARY,
+            fg=self.theme.TEXT_MUTED
+        ).pack(side="right")
+        
+        # Bind Ctrl+Enter
+        self.root.bind("<Control-Return>", lambda e: self.gerar_cards())
+    
+    def _add_button_hover(self, button):
+        """Adiciona efeitos de hover aos botões secundários."""
+        button.bind("<Enter>", lambda e: button.config(bg=self.theme.BG_HOVER))
+        button.bind("<Leave>", lambda e: button.config(bg=self.theme.BG_SECONDARY))
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    #  FOOTER — Status e informações
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    def _build_footer(self):
+        """
+        Rodapé com status detalhado e informações do sistema.
+        """
+        # Separador
+        tk.Frame(self.root, bg=self.theme.BORDER, height=1).pack(fill="x", side="bottom")
+        
+        # Footer
+        footer = tk.Frame(self.root, bg=self.theme.BG_SECONDARY, height=36)
+        footer.pack(fill="x", side="bottom")
+        footer.pack_propagate(False)
+        
+        footer_content = tk.Frame(footer, bg=self.theme.BG_SECONDARY)
+        footer_content.pack(fill="both", expand=True, padx=20, pady=8)
+        
+        # ── Status (esquerda) ───────────────────────────────────────────────────
+        status_frame = tk.Frame(footer_content, bg=self.theme.BG_SECONDARY)
+        status_frame.pack(side="left", fill="y")
+        
+        self.status_icon = tk.Label(
+            status_frame,
+            text="◉",
+            font=self.theme.get_ui_font(10),
+            bg=self.theme.BG_SECONDARY,
+            fg=self.theme.SUCCESS
+        )
+        self.status_icon.pack(side="left", padx=(0, 6))
+        
+        self.status_label = tk.Label(
+            status_frame,
+            text="Pronto para gerar flashcards",
+            font=self.theme.get_ui_font(9),
+            bg=self.theme.BG_SECONDARY,
+            fg=self.theme.TEXT_SECONDARY
+        )
+        self.status_label.pack(side="left")
+        
+        # ── Versão (direita) ────────────────────────────────────────────────────
+        version_frame = tk.Frame(footer_content, bg=self.theme.BG_SECONDARY)
+        version_frame.pack(side="right", fill="y")
+        
+        tk.Label(
+            version_frame,
+            text=f"{APP_NAME} {APP_VERSION}",
+            font=self.theme.get_mono_font(8),
+            bg=self.theme.BG_SECONDARY,
+            fg=self.theme.TEXT_MUTED
+        ).pack(side="right")
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    #  MÉTODOS UTILITÁRIOS
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    def _update_char_counter(self, event=None):
+        """Atualiza contadores de caracteres e tokens."""
+        texto = self.text_input.get("1.0", tk.END).strip()
+        chars = len(texto)
+        tokens_est = chars // 4
+        
+        self.char_counter_label.config(text=f"{chars:,} caracteres")
+        self.token_counter_label.config(text=f"~{tokens_est:,} tokens")
+    
+    def _show_preview_placeholder(self):
+        """Mostra placeholder no preview."""
+        self.preview.config(state="normal")
+        self.preview.delete("1.0", tk.END)
+        
+        placeholder = """
+    ╭──────────────────────────────────────────╮
+    │                                          │
+    │       Cole um texto no painel            │
+    │       esquerdo e clique em               │
+    │       "GERAR FLASHCARDS"                 │
+    │                                          │
+    │       Os cards aparecerão aqui           │
+    │       com scores de qualidade            │
+    │                                          │
+    ╰──────────────────────────────────────────╯
+"""
+        self.preview.insert("1.0", placeholder, "processing")
+        self.preview.config(state="disabled")
+    
+    def _insert_preview_formatted(self, cards, hard):
+        """Insere cards formatados no preview com cores."""
+        self.preview.config(state="normal")
+        self.preview.delete("1.0", tk.END)
+        
+        if not cards:
+            self.preview.insert("1.0", "Nenhum card gerado.", "error")
+            self.preview.config(state="disabled")
+            return
+        
+        # Calcular scores e média
+        scores = [score_card(c["q"], c["a"], hard) for c in cards]
+        avg = round(sum(scores) / len(scores), 1) if scores else 0.0
+        
+        # Atualizar métricas no header
+        self.cards_count_var.set(str(len(cards)))
+        self.avg_score_var.set(str(avg))
+        
+        # Armazenar dados
+        self.cards_data = cards
+        
+        # Inserir cards
+        for i, c in enumerate(cards):
+            sc = scores[i]
+            
+            # Score badge
+            self.preview.insert(tk.END, f"┌─ Score: {sc}/10 ", "score")
+            
+            # Indicador visual de qualidade
+            if sc >= 8.0:
+                self.preview.insert(tk.END, "●●●●● Excelente\n", "score")
+            elif sc >= 6.5:
+                self.preview.insert(tk.END, "●●●●○ Bom\n", "score")
+            elif sc >= 5.0:
+                self.preview.insert(tk.END, "●●●○○ Regular\n", "score")
+            else:
+                self.preview.insert(tk.END, "●●○○○ Revisar\n", "score")
+            
+            # Pergunta
+            self.preview.insert(tk.END, f"│ Q: {c['q']}\n", "pergunta")
+            
+            # Resposta
+            self.preview.insert(tk.END, f"│ A: {c['a']}\n", "resposta")
+            
+            # Separador
+            if i < len(cards) - 1:
+                self.preview.insert(tk.END, "└─────────────────────────────────────────\n\n", "separator")
+            else:
+                self.preview.insert(tk.END, "└─────────────────────────────────────────\n", "separator")
+        
+        self.preview.config(state="disabled")
+    
+    def _set_busy(self, is_busy: bool, msg: str = ""):
+        """Define estado de ocupado (desabilita botões)."""
+        state = "disabled" if is_busy else "normal"
+        
+        self.btn_gerar.config(state=state)
+        self.btn_exportar.config(state=state)
+        self.btn_copiar.config(state=state)
+        self.btn_limpar.config(state=state)
+        
+        if is_busy:
+            self.status_icon.config(fg=self.theme.WARNING, text="◉")
+            self.status_label.config(text=msg if msg else "Processando...")
+        else:
+            self.status_icon.config(fg=self.theme.SUCCESS, text="◉")
+    
+    def _update_status(self, msg: str, status_type: str = "info"):
+        """Atualiza status no footer."""
+        color_map = {
+            "info": self.theme.INFO,
+            "success": self.theme.SUCCESS,
+            "warning": self.theme.WARNING,
+            "error": self.theme.ERROR
+        }
+        self.root.after(0, lambda: (
+            self.status_icon.config(fg=color_map.get(status_type, self.theme.INFO)),
+            self.status_label.config(text=msg)
+        ))
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    #  AÇÕES PRINCIPAIS
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    def gerar_cards(self):
+        """Gera flashcards a partir do texto de entrada."""
+        texto = self.text_input.get("1.0", tk.END).strip()
+        if not texto:
+            messagebox.showerror("Erro", "Insira um texto para análise.")
+            return
 
-            if not cards1:
-                raise RuntimeError(
-                    "Não consegui extrair nenhum card da resposta.\n\n"
-                    "Possíveis causas:\n"
-                    "- Texto muito curto ou vago\n"
-                    "- API retornou formato inesperado\n\n"
-                    "Tente novamente ou reduza/reformule o texto."
-                )
+        hard = bool(self.hard_var.get())
+        do_refine = bool(self.refine_var.get())
 
-            cards_final = cards1
-            if do_refine and len(cards1) >= 1:
-                atualizar_status("🧼 Refinando flashcards (2ª passada)...")
+        self._set_busy(True, "Gerando flashcards... aguarde")
+        
+        # Mostrar estado de processamento no preview
+        self.preview.config(state="normal")
+        self.preview.delete("1.0", tk.END)
+        self.preview.insert(tk.END, "\n\n       ⏳ Processando sua solicitação...\n\n", "processing")
+        self.preview.insert(tk.END, "       Isso pode levar alguns segundos.\n", "processing")
+        if do_refine:
+            self.preview.insert(tk.END, "       (Refinamento ativado: 2 passadas)\n", "processing")
+        self.preview.config(state="disabled")
+        
+        # Resetar métricas
+        self.cards_count_var.set("...")
+        self.avg_score_var.set("...")
 
-                cards_text = format_cards_for_refine(cards1)
-                refine_prompt = REFINE_PROMPT.format(
-                    DIFICULDADE=("HARD" if hard else "NORMAL"),
-                    TEXTO=texto,
-                    CARDS=cards_text
-                )
+        def chamar_api():
+            try:
+                qtd = self.qtd_var.get().strip().upper()
+                modo = "AUTOMÁTICO" if qtd == "AUTO" else "MANUAL"
+
+                base_prompt = PROMPT_HARD if hard else PROMPT_NORMAL
+                prompt = base_prompt.format(MODO=modo, QTD=qtd, TEXTO=texto)
+
+                self._update_status("Gerando flashcards (1ª passada)...", "warning")
                 
-                resp2 = client.chat.completions.create(
+                resp1 = client.chat.completions.create(
                     model=MODEL_NAME,
-                    messages=[{"role": "user", "content": refine_prompt}],
-                    temperature=0.3
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.4
                 )
-                raw2 = (resp2.choices[0].message.content or "").strip()
-                cards2 = parse_cards(raw2)
-                
-                min_cards = max(1, int(len(cards1) * 0.5))
-                if len(cards2) >= min_cards:
-                    cards_final = cards2
+                raw1 = (resp1.choices[0].message.content or "").strip()
+                cards1 = parse_cards(raw1)
 
-            preview_text = format_cards_for_preview(cards_final, hard=hard)
-            root.after(0, lambda: finalizar_geracao(preview_text, len(cards_final), hard, do_refine))
+                if not cards1:
+                    raise RuntimeError(
+                        "Não consegui extrair nenhum card da resposta.\n\n"
+                        "Possíveis causas:\n"
+                        "• Texto muito curto ou vago\n"
+                        "• API retornou formato inesperado\n\n"
+                        "Tente novamente ou reformule o texto."
+                    )
 
-        except Exception as e:
-            msg = str(e)
-            root.after(0, lambda m=msg: erro_geracao(m))
+                cards_final = cards1
+                if do_refine and len(cards1) >= 1:
+                    self._update_status("Refinando flashcards (2ª passada)...", "warning")
 
-    threading.Thread(target=chamar_api, daemon=True).start()
+                    cards_text = format_cards_for_refine(cards1)
+                    refine_prompt = REFINE_PROMPT.format(
+                        DIFICULDADE=("HARD" if hard else "NORMAL"),
+                        TEXTO=texto,
+                        CARDS=cards_text
+                    )
+                    
+                    resp2 = client.chat.completions.create(
+                        model=MODEL_NAME,
+                        messages=[{"role": "user", "content": refine_prompt}],
+                        temperature=0.3
+                    )
+                    raw2 = (resp2.choices[0].message.content or "").strip()
+                    cards2 = parse_cards(raw2)
+                    
+                    min_cards = max(1, int(len(cards1) * 0.5))
+                    if len(cards2) >= min_cards:
+                        cards_final = cards2
 
+                self.root.after(0, lambda: self._finalizar_geracao(cards_final, hard, do_refine))
 
-def finalizar_geracao(preview_text: str, count: int, hard: bool, refined: bool):
-    inserir_preview_formatado(preview_text)
-    hard_txt = "HARD" if hard else "NORMAL"
-    ref_txt = " • refinado" if refined else ""
-    status_label.config(text=f"✅ {count} flashcard(s) gerado(s)! • modo {hard_txt}{ref_txt}")
-    set_busy(False)
+            except Exception as e:
+                msg = str(e)
+                self.root.after(0, lambda m=msg: self._erro_geracao(m))
 
-
-def erro_geracao(mensagem: str):
-    preview.config(state="normal")
-    preview.delete("1.0", tk.END)
-    preview.insert(tk.END, f"❌ Erro ao gerar flashcards:\n\n{mensagem}")
-    preview.config(state="disabled")
-    status_label.config(text="❌ Erro na geração. Tente novamente.")
-    set_busy(False)
-    messagebox.showerror("Erro", mensagem)
-
-
-def exportar_cards():
-    """Função principal de exportação com dialog de escolha"""
-    conteudo = preview.get("1.0", tk.END).strip()
-    if not conteudo or conteudo.startswith("⏳") or conteudo.startswith("❌"):
-        messagebox.showwarning("Aviso", "Nenhum card válido para exportar.")
-        return
-
-    cards = parse_cards(conteudo)
-    if not cards:
-        messagebox.showwarning("Aviso", "Não encontrei cards no formato Q/A para exportar.")
-        return
-
-    # Abre dialog de exportação
-    dialog = ExportDialog(root, len(cards))
-    root.wait_window(dialog)
+        threading.Thread(target=chamar_api, daemon=True).start()
     
-    if not dialog.result:
-        return  # Cancelou
+    def _finalizar_geracao(self, cards, hard, refined):
+        """Finaliza a geração com sucesso."""
+        self._insert_preview_formatted(cards, hard)
+        
+        hard_txt = "HARD" if hard else "NORMAL"
+        ref_txt = " + refinado" if refined else ""
+        
+        self._set_busy(False)
+        self._update_status(
+            f"✓ {len(cards)} flashcard(s) gerado(s) • modo {hard_txt}{ref_txt}",
+            "success"
+        )
     
-    formato = dialog.result
-    deck_name = dialog.deck_name
+    def _erro_geracao(self, mensagem: str):
+        """Trata erro na geração."""
+        self.preview.config(state="normal")
+        self.preview.delete("1.0", tk.END)
+        self.preview.insert(tk.END, f"\n  ❌ Erro ao gerar flashcards:\n\n  {mensagem}", "error")
+        self.preview.config(state="disabled")
+        
+        self.cards_count_var.set("0")
+        self.avg_score_var.set("—")
+        
+        self._set_busy(False)
+        self._update_status("Erro na geração. Tente novamente.", "error")
+        messagebox.showerror("Erro", mensagem)
     
-    # === ANKI .APKG ===
-    if formato == "anki_apkg":
+    def exportar_cards(self):
+        """Exporta flashcards para arquivo."""
+        if not self.cards_data:
+            messagebox.showwarning("Aviso", "Nenhum card válido para exportar.\nGere flashcards primeiro.")
+            return
+
+        # Abre dialog de exportação
+        dialog = ExportDialog(self.root, len(self.cards_data), self.theme)
+        self.root.wait_window(dialog)
+        
+        if not dialog.result:
+            return
+        
+        formato = dialog.result
+        deck_name = dialog.deck_name
+        
+        if formato == "anki_apkg":
+            self._export_apkg(deck_name)
+        elif formato == "anki_txt":
+            self._export_txt("anki")
+        elif formato == "noji_txt":
+            self._export_txt("noji")
+    
+    def _export_apkg(self, deck_name):
+        """Exporta para formato .apkg do Anki."""
         path = filedialog.asksaveasfilename(
             defaultextension=".apkg",
             filetypes=[("Pacote Anki", "*.apkg"), ("Todos os arquivos", "*.*")],
@@ -723,11 +1692,11 @@ def exportar_cards():
 
         try:
             model_id = 1607392319
-            deck_id = abs(hash(deck_name)) % (10 ** 10)  # ID baseado no nome
+            deck_id = abs(hash(deck_name)) % (10 ** 10)
 
             modelo = genanki.Model(
                 model_id,
-                "Flashcard Gerado",
+                "AnkiLab Flashcard",
                 fields=[
                     {"name": "Frente"},
                     {"name": "Verso"},
@@ -741,19 +1710,24 @@ def exportar_cards():
                 ],
                 css="""
                 .card {
-                    font-family: Arial, sans-serif;
+                    font-family: 'Segoe UI', Arial, sans-serif;
                     font-size: 20px;
                     text-align: center;
-                    color: #333;
-                    background-color: #fff;
-                    padding: 20px;
+                    color: #e6edf3;
+                    background-color: #0f1419;
+                    padding: 24px;
+                }
+                hr#answer {
+                    border: none;
+                    border-top: 1px solid #30363d;
+                    margin: 20px 0;
                 }
                 """
             )
 
             deck = genanki.Deck(deck_id, deck_name)
 
-            for c in cards:
+            for c in self.cards_data:
                 nota = genanki.Note(
                     model=modelo,
                     fields=[c["q"], c["a"]],
@@ -764,230 +1738,304 @@ def exportar_cards():
             pacote = genanki.Package(deck)
             pacote.write_to_file(path)
 
-            status_label.config(text=f"📁 Exportado: {len(cards)} cards → {os.path.basename(path)}")
+            self._update_status(f"Exportado: {len(self.cards_data)} cards → {os.path.basename(path)}", "success")
             messagebox.showinfo(
-                "Sucesso",
-                f"✅ {len(cards)} flashcard(s) exportado(s)!\n\n"
-                f"📦 Deck: {deck_name}\n"
-                f"📁 Arquivo: {path}\n\n"
+                "Exportação Concluída",
+                f"✓ {len(self.cards_data)} flashcard(s) exportado(s)!\n\n"
+                f"Deck: {deck_name}\n"
+                f"Arquivo: {path}\n\n"
                 "No Anki: Arquivo → Importar → selecione o .apkg"
             )
 
         except Exception as e:
-            messagebox.showerror("Erro ao exportar .apkg", str(e))
+            messagebox.showerror("Erro ao exportar", str(e))
     
-    # === ANKI .TXT ===
-    elif formato == "anki_txt":
+    def _export_txt(self, target):
+        """Exporta para formato .txt (tabulado)."""
+        title = "Salvar para Anki (.txt)" if target == "anki" else "Salvar para Noji (.txt)"
+        filename = "flashcards_anki.txt" if target == "anki" else "flashcards_noji.txt"
+        
         path = filedialog.asksaveasfilename(
             defaultextension=".txt",
             filetypes=[("Arquivo de texto", "*.txt"), ("Todos os arquivos", "*.*")],
-            title="Salvar para Anki (.txt)",
-            initialfile="flashcards_anki.txt"
+            title=title,
+            initialfile=filename
         )
         if not path:
             return
 
         try:
-            export_text = format_cards_for_export_tab(cards)
+            export_text = format_cards_for_export_tab(self.cards_data)
             with open(path, "w", encoding="utf-8") as f:
                 f.write(export_text)
 
-            status_label.config(text=f"📁 Exportado: {len(cards)} cards → {os.path.basename(path)}")
-            messagebox.showinfo(
-                "Sucesso",
-                f"✅ {len(cards)} flashcard(s) exportado(s)!\n\n"
-                f"📁 Arquivo: {path}\n\n"
-                "No Anki:\n"
-                "1. Arquivo → Importar\n"
-                "2. Separador de campo: Tab\n"
-                "3. Importar"
-            )
+            self._update_status(f"Exportado: {len(self.cards_data)} cards → {os.path.basename(path)}", "success")
+            
+            if target == "anki":
+                msg = (
+                    f"✓ {len(self.cards_data)} flashcard(s) exportado(s)!\n\n"
+                    f"Arquivo: {path}\n\n"
+                    "No Anki:\n"
+                    "1. Arquivo → Importar\n"
+                    "2. Separador de campo: Tab\n"
+                    "3. Importar"
+                )
+            else:
+                msg = (
+                    f"✓ {len(self.cards_data)} flashcard(s) exportado(s)!\n\n"
+                    f"Arquivo: {path}\n\n"
+                    "No Noji:\n"
+                    "1. Vá em Importar cartões\n"
+                    "2. Cole o conteúdo do arquivo\n"
+                    "3. Entre frente/verso: Tab\n"
+                    "4. Entre cartões: Nova linha"
+                )
+            
+            messagebox.showinfo("Exportação Concluída", msg)
 
         except Exception as e:
             messagebox.showerror("Erro ao exportar", str(e))
     
-    # === NOJI .TXT ===
-    elif formato == "noji_txt":
-        path = filedialog.asksaveasfilename(
-            defaultextension=".txt",
-            filetypes=[("Arquivo de texto", "*.txt"), ("Todos os arquivos", "*.*")],
-            title="Salvar para Noji (.txt)",
-            initialfile="flashcards_noji.txt"
-        )
-        if not path:
+    def copiar_clipboard(self):
+        """Copia flashcards para a área de transferência."""
+        if not self.cards_data:
+            messagebox.showwarning("Aviso", "Nenhum conteúdo para copiar.")
             return
 
-        try:
-            export_text = format_cards_for_export_tab(cards)
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(export_text)
+        texto_limpo = format_cards_for_export_tab(self.cards_data)
 
-            status_label.config(text=f"📁 Exportado: {len(cards)} cards → {os.path.basename(path)}")
-            messagebox.showinfo(
-                "Sucesso",
-                f"✅ {len(cards)} flashcard(s) exportado(s)!\n\n"
-                f"📁 Arquivo: {path}\n\n"
-                "No Noji:\n"
-                "1. Vá em Importar cartões\n"
-                "2. Cole o conteúdo do arquivo OU\n"
-                "   abra o arquivo e copie tudo (Ctrl+A, Ctrl+C)\n"
-                "3. Entre frente/verso: Tab\n"
-                "4. Entre cartões: Nova linha"
+        self.root.clipboard_clear()
+        self.root.clipboard_append(texto_limpo)
+        self.root.update()
+        
+        self._update_status("Copiado! Cole no Anki ou Noji (formato Tab)", "success")
+    
+    def limpar_tudo(self):
+        """Limpa todos os campos."""
+        self.text_input.delete("1.0", tk.END)
+        self.qtd_var.set("AUTO")
+        self.hard_var.set(False)
+        self.refine_var.set(False)
+        self.cards_data = []
+        self.cards_count_var.set("0")
+        self.avg_score_var.set("—")
+        
+        self._show_preview_placeholder()
+        self._update_char_counter()
+        self._update_mode_display()
+        self._update_status("Campos limpos. Pronto para nova geração.", "info")
+
+
+# ╔═══════════════════════════════════════════════════════════════════════════════╗
+# ║  DIALOG DE EXPORTAÇÃO (com tema Neuro)                                        ║
+# ╚═══════════════════════════════════════════════════════════════════════════════╝
+
+class ExportDialog(tk.Toplevel):
+    """Dialog modal para escolha do formato de exportação."""
+    
+    def __init__(self, parent, num_cards, theme):
+        super().__init__(parent)
+        self.theme = theme
+        self.result = None
+        self.deck_name = "Flashcards AnkiLab"
+        
+        # ── Configuração da janela ──────────────────────────────────────────────
+        self.title("Exportar Flashcards")
+        self.geometry("460x340")
+        self.resizable(False, False)
+        self.transient(parent)
+        self.grab_set()
+        self.configure(bg=self.theme.BG_MAIN)
+        
+        # Centralizar na tela
+        self.update_idletasks()
+        x = parent.winfo_x() + (parent.winfo_width() // 2) - (460 // 2)
+        y = parent.winfo_y() + (parent.winfo_height() // 2) - (340 // 2)
+        self.geometry(f"+{x}+{y}")
+        
+        # ── Construir interface ─────────────────────────────────────────────────
+        self._build_ui(num_cards)
+    
+    def _build_ui(self, num_cards):
+        """Constrói a interface do dialog."""
+        # Header
+        header = tk.Frame(self, bg=self.theme.BG_SECONDARY)
+        header.pack(fill="x")
+        
+        header_content = tk.Frame(header, bg=self.theme.BG_SECONDARY)
+        header_content.pack(fill="x", padx=24, pady=16)
+        
+        tk.Label(
+            header_content,
+            text="💾",
+            font=("Segoe UI Emoji", 20),
+            bg=self.theme.BG_SECONDARY,
+            fg=self.theme.TEXT_PRIMARY
+        ).pack(side="left", padx=(0, 12))
+        
+        title_frame = tk.Frame(header_content, bg=self.theme.BG_SECONDARY)
+        title_frame.pack(side="left", fill="y")
+        
+        tk.Label(
+            title_frame,
+            text="Exportar Flashcards",
+            font=self.theme.get_ui_font(14, "bold"),
+            bg=self.theme.BG_SECONDARY,
+            fg=self.theme.TEXT_PRIMARY
+        ).pack(anchor="w")
+        
+        tk.Label(
+            title_frame,
+            text=f"{num_cards} card(s) prontos para exportar",
+            font=self.theme.get_ui_font(10),
+            bg=self.theme.BG_SECONDARY,
+            fg=self.theme.TEXT_SECONDARY
+        ).pack(anchor="w")
+        
+        # Conteúdo
+        content = tk.Frame(self, bg=self.theme.BG_MAIN)
+        content.pack(fill="both", expand=True, padx=24, pady=20)
+        
+        # Label formato
+        tk.Label(
+            content,
+            text="Escolha o formato:",
+            font=self.theme.get_ui_font(10),
+            bg=self.theme.BG_MAIN,
+            fg=self.theme.TEXT_SECONDARY
+        ).pack(anchor="w", pady=(0, 12))
+        
+        # Opções de formato
+        self.formato_var = tk.StringVar(value="anki_apkg")
+        
+        formatos = [
+            ("anki_apkg", "📗  Anki (.apkg)", "Pacote nativo — importação direta"),
+            ("anki_txt", "📄  Anki (.txt)", "Texto tabulado — flexível"),
+            ("noji_txt", "🟣  Noji (.txt)", "Texto tabulado para Noji")
+        ]
+        
+        for value, label, desc in formatos:
+            frame = tk.Frame(content, bg=self.theme.BG_MAIN)
+            frame.pack(fill="x", pady=4)
+            
+            rb = tk.Radiobutton(
+                frame,
+                variable=self.formato_var,
+                value=value,
+                bg=self.theme.BG_MAIN,
+                fg=self.theme.TEXT_PRIMARY,
+                activebackground=self.theme.BG_MAIN,
+                activeforeground=self.theme.TEXT_PRIMARY,
+                selectcolor=self.theme.BG_INPUT,
+                highlightthickness=0,
+                command=self._toggle_deck_name
             )
+            rb.pack(side="left")
+            
+            label_frame = tk.Frame(frame, bg=self.theme.BG_MAIN)
+            label_frame.pack(side="left", fill="y")
+            
+            tk.Label(
+                label_frame,
+                text=label,
+                font=self.theme.get_ui_font(10),
+                bg=self.theme.BG_MAIN,
+                fg=self.theme.TEXT_PRIMARY,
+                cursor="hand2"
+            ).pack(anchor="w")
+            
+            tk.Label(
+                label_frame,
+                text=desc,
+                font=self.theme.get_ui_font(8),
+                bg=self.theme.BG_MAIN,
+                fg=self.theme.TEXT_MUTED
+            ).pack(anchor="w")
+        
+        # Nome do deck
+        self.deck_frame = tk.Frame(content, bg=self.theme.BG_MAIN)
+        self.deck_frame.pack(fill="x", pady=(16, 0))
+        
+        tk.Label(
+            self.deck_frame,
+            text="Nome do Deck:",
+            font=self.theme.get_ui_font(10),
+            bg=self.theme.BG_MAIN,
+            fg=self.theme.TEXT_SECONDARY
+        ).pack(anchor="w", pady=(0, 6))
+        
+        self.deck_entry = tk.Entry(
+            self.deck_frame,
+            font=self.theme.get_ui_font(10),
+            bg=self.theme.BG_INPUT,
+            fg=self.theme.TEXT_PRIMARY,
+            insertbackground=self.theme.ACCENT_PRIMARY,
+            relief="flat",
+            highlightthickness=1,
+            highlightbackground=self.theme.BORDER,
+            highlightcolor=self.theme.BORDER_FOCUS
+        )
+        self.deck_entry.insert(0, "Flashcards AnkiLab")
+        self.deck_entry.pack(fill="x", ipady=6)
+        
+        # Botões
+        btn_frame = tk.Frame(self, bg=self.theme.BG_MAIN)
+        btn_frame.pack(fill="x", padx=24, pady=20)
+        
+        tk.Button(
+            btn_frame,
+            text="Cancelar",
+            font=self.theme.get_ui_font(10),
+            bg=self.theme.BG_SECONDARY,
+            fg=self.theme.TEXT_PRIMARY,
+            activebackground=self.theme.BG_HOVER,
+            activeforeground=self.theme.TEXT_PRIMARY,
+            relief="flat",
+            cursor="hand2",
+            padx=20,
+            pady=8,
+            command=self._cancelar
+        ).pack(side="right", padx=(8, 0))
+        
+        tk.Button(
+            btn_frame,
+            text="Exportar",
+            font=self.theme.get_ui_font(10, "bold"),
+            bg=self.theme.ACCENT_PRIMARY,
+            fg=self.theme.TEXT_INVERSE,
+            activebackground=self.theme.ACCENT_TERTIARY,
+            activeforeground=self.theme.TEXT_INVERSE,
+            relief="flat",
+            cursor="hand2",
+            padx=20,
+            pady=8,
+            command=self._exportar
+        ).pack(side="right")
+    
+    def _toggle_deck_name(self):
+        """Mostra/esconde campo de nome do deck."""
+        if self.formato_var.get() == "anki_apkg":
+            self.deck_entry.config(state="normal")
+        else:
+            self.deck_entry.config(state="disabled")
+    
+    def _exportar(self):
+        """Confirma exportação."""
+        self.deck_name = self.deck_entry.get().strip() or "Flashcards AnkiLab"
+        self.result = self.formato_var.get()
+        self.destroy()
+    
+    def _cancelar(self):
+        """Cancela exportação."""
+        self.result = None
+        self.destroy()
 
-        except Exception as e:
-            messagebox.showerror("Erro ao exportar", str(e))
 
+# ╔═══════════════════════════════════════════════════════════════════════════════╗
+# ║  PONTO DE ENTRADA                                                             ║
+# ╚═══════════════════════════════════════════════════════════════════════════════╝
 
-def copiar_clipboard():
-    conteudo = preview.get("1.0", tk.END).strip()
-    if not conteudo or conteudo.startswith("⏳"):
-        messagebox.showwarning("Aviso", "Nenhum conteúdo para copiar.")
-        return
-
-    cards = parse_cards(conteudo)
-    if cards:
-        # Formato tabulado (compatível com Noji direto)
-        texto_limpo = format_cards_for_export_tab(cards)
-    else:
-        texto_limpo = conteudo
-
-    root.clipboard_clear()
-    root.clipboard_append(texto_limpo)
-    root.update()
-    status_label.config(text="📋 Copiado! Cole no Anki ou Noji (formato Tab já pronto)")
-
-
-def limpar_tudo():
-    text_input.delete("1.0", tk.END)
-    preview.config(state="normal")
-    preview.delete("1.0", tk.END)
-    preview.config(state="disabled")
-    qtd_var.set("AUTO")
-    hard_var.set(False)
-    refine_var.set(False)
-    status_label.config(text="🔄 Campos limpos. Pronto para nova geração.")
-    atualizar_contador()
-
-
-# =========================
-# INTERFACE (UI)
-# =========================
-root = tk.Tk()
-root.title(f"Gerador de Flashcards • Anki & Noji • {APP_VERSION}")
-root.geometry("1040x760")
-root.minsize(840, 640)
-
-style = ttk.Style()
-style.configure("TButton", padding=6)
-
-# =========================
-# FRAME SUPERIOR - INPUT
-# =========================
-frame_input = ttk.LabelFrame(root, text="📝 Texto para Análise", padding=10)
-frame_input.pack(fill="x", padx=10, pady=(10, 5))
-
-text_input = tk.Text(
-    frame_input,
-    height=10,
-    wrap="word",
-    font=("Consolas", 10),
-    relief="flat",
-    borderwidth=1,
-    highlightthickness=1,
-    highlightbackground="#ccc",
-    highlightcolor="#0078d4"
-)
-text_input.pack(fill="x", pady=(0, 5))
-text_input.bind("<KeyRelease>", atualizar_contador)
-
-contador_label = ttk.Label(frame_input, text="0 caracteres  •  ~0 tokens", foreground="#666")
-contador_label.pack(anchor="e")
-
-# =========================
-# FRAME DE CONTROLES
-# =========================
-frame_controles = ttk.Frame(root, padding=5)
-frame_controles.pack(fill="x", padx=10, pady=5)
-
-ttk.Label(frame_controles, text="Quantidade:").grid(row=0, column=0, padx=(0, 5))
-
-qtd_var = tk.StringVar(value="AUTO")
-entry_qtd = ttk.Entry(frame_controles, textvariable=qtd_var, width=10, justify="center")
-entry_qtd.grid(row=0, column=1, padx=(0, 6))
-
-ttk.Label(frame_controles, text="(número ou AUTO)", foreground="#666").grid(row=0, column=2, padx=(0, 14))
-
-hard_var = tk.BooleanVar(value=False)
-chk_hard = ttk.Checkbutton(frame_controles, text="🔥 Modo HARD", variable=hard_var)
-chk_hard.grid(row=0, column=3, padx=(0, 10))
-
-refine_var = tk.BooleanVar(value=False)
-chk_refine = ttk.Checkbutton(frame_controles, text="🧼 Refinar (2ª passada)", variable=refine_var)
-chk_refine.grid(row=0, column=4, padx=(0, 10))
-
-btn_gerar = ttk.Button(frame_controles, text="🚀 Gerar Cards", command=gerar_cards, width=15)
-btn_gerar.grid(row=0, column=5, padx=5)
-
-btn_exportar = ttk.Button(frame_controles, text="💾 Exportar", command=exportar_cards, width=12)
-btn_exportar.grid(row=0, column=6, padx=5)
-
-btn_copiar = ttk.Button(frame_controles, text="📋 Copiar", command=copiar_clipboard, width=12)
-btn_copiar.grid(row=0, column=7, padx=5)
-
-btn_limpar = ttk.Button(frame_controles, text="🔄 Limpar", command=limpar_tudo, width=12)
-btn_limpar.grid(row=0, column=8, padx=5)
-
-# =========================
-# FRAME INFERIOR - PREVIEW
-# =========================
-frame_preview = ttk.LabelFrame(root, text="🎴 Flashcards Gerados (com Score)", padding=10)
-frame_preview.pack(fill="both", expand=True, padx=10, pady=(5, 10))
-
-frame_texto = ttk.Frame(frame_preview)
-frame_texto.pack(fill="both", expand=True)
-
-scrollbar = ttk.Scrollbar(frame_texto)
-scrollbar.pack(side="right", fill="y")
-
-preview = tk.Text(
-    frame_texto,
-    height=20,
-    wrap="word",
-    font=("Consolas", 10),
-    relief="flat",
-    borderwidth=1,
-    highlightthickness=1,
-    highlightbackground="#ccc",
-    highlightcolor="#0078d4",
-    yscrollcommand=scrollbar.set,
-    state="disabled"
-)
-preview.pack(fill="both", expand=True, side="left")
-scrollbar.config(command=preview.yview)
-
-preview.tag_configure("header", foreground="#444", font=("Consolas", 10, "bold"))
-preview.tag_configure("score", foreground="#8a2be2", font=("Consolas", 10, "bold"))
-preview.tag_configure("pergunta", foreground="#0066cc", font=("Consolas", 10, "bold"))
-preview.tag_configure("resposta", foreground="#228b22", font=("Consolas", 10))
-
-# =========================
-# BARRA DE STATUS
-# =========================
-frame_status = ttk.Frame(root)
-frame_status.pack(fill="x", padx=10, pady=(0, 10))
-
-status_label = ttk.Label(
-    frame_status,
-    text="✨ Pronto. Cole um texto e clique em 'Gerar Cards'.",
-    foreground="#666"
-)
-status_label.pack(side="left")
-
-versao_label = ttk.Label(frame_status, text=f"{APP_VERSION} • {MODEL_NAME}", foreground="#999")
-versao_label.pack(side="right")
-
-# =========================
-# INICIAR
-# =========================
-root.mainloop()
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = AnkiLabApp(root)
+    root.mainloop()
