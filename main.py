@@ -12,6 +12,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from openai import OpenAI
 import genanki
+from string import Template
 
 
 # ╔═══════════════════════════════════════════════════════════════════════════════╗
@@ -53,7 +54,6 @@ class NeuroTheme:
     # ── Flashcards ──────────────────────────────────────────────────────────────
     CARD_Q = "#58a6ff"
     CARD_A = "#3fb950"
-    CARD_SCORE = "#d2a8ff"
     CARD_HEADER = "#f0883e"
     
     # ── Fontes (escala compacta) ────────────────────────────────────────────────
@@ -97,7 +97,7 @@ if not api_key:
 
 client = OpenAI(api_key=api_key)
 MODEL_NAME = "gpt-4.1-mini"
-APP_VERSION = "v2.0"
+APP_VERSION = "v2.1"
 APP_NAME = "AnkiLab"
 APP_TAGLINE = "Cognitive Flashcard Engine"
 
@@ -126,20 +126,29 @@ REGRAS FUNDAMENTAIS
 - Para cada conceito central, gere NO MÁXIMO:
   • 1 cartão definicional
 - Use definições SOMENTE quando indispensáveis.
+- Quando o conceito envolver programação, inclua código se isso aumentar a clareza.
 
 ━━━━━━━━━━
 REGRAS DE RETENÇÃO (CRÍTICAS)
 ━━━━━━━━━━
-- A resposta deve ser CURTA, OBJETIVA e MENSURÁVEL.
+PARA RESPOSTAS TEXTUAIS (conceitos, explicações):
+- Devem ser CURTAS, OBJETIVAS e MENSURÁVEIS.
 - Preferencialmente 1 frase.
 - No máximo 2 frases curtas.
 - Se uma resposta exigir mais de uma ideia, DIVIDA em mais de um cartão.
 - O aluno deve conseguir avaliar claramente se acertou ou errou.
 
+PARA RESPOSTAS COM CÓDIGO:
+- O código pode ter quantas linhas forem necessárias para representar a ideia corretamente.
+- NÃO force código em 1 linha se isso prejudicar a legibilidade.
+- Priorize clareza e boas práticas no código.
+- Inclua apenas o código essencial (sem boilerplate desnecessário).
+- Uma breve explicação textual (1 linha) pode acompanhar o código se necessário.
+
 ━━━━━━━━━━
-TIPOS DE CARTÃO (ordem obrigatória)
+TIPOS DE CARTÃO (ordem de prioridade)
 ━━━━━━━━━━
-1) Aplicação prática
+1) Aplicação prática (incluindo código quando relevante)
 2) Distinção / comparação
 3) Causa e consequência
 4) Definição essencial (última opção)
@@ -156,7 +165,7 @@ A: A computação está presente em várias atividades do cotidiano.
 → Problema: Genérico, respondível por senso comum.
 
 ━━━━━━━━━━
-EXEMPLO DE CARTÃO BOM (FAÇA ASSIM)
+EXEMPLO DE CARTÃO BOM — TEXTUAL (FAÇA ASSIM)
 ━━━━━━━━━━
 Q: Por que a validação de formulário deve estar no back-end e não apenas no front-end?
 A: Porque o front-end pode ser manipulado; o back-end garante segurança e integridade.
@@ -165,18 +174,43 @@ Q: Qual a consequência de escolher um hardware inferior às exigências do soft
 A: Baixa performance, travamentos ou incompatibilidade.
 
 ━━━━━━━━━━
+EXEMPLO DE CARTÃO BOM — COM CÓDIGO (FAÇA ASSIM)
+━━━━━━━━━━
+Q: Como criar uma list comprehension em Python que filtra apenas números pares de uma lista?
+A:
+pares = [x for x in lista if x % 2 == 0]
+
+Q: Como fazer uma requisição GET assíncrona com fetch em JavaScript e tratar o JSON?
+A:
+async function getData(url) {{
+  const response = await fetch(url);
+  const data = await response.json();
+  return data;
+}}
+
+Q: Como definir uma rota POST básica em Express.js que recebe JSON?
+A:
+app.use(express.json());
+
+app.post('/api/dados', (req, res) => {{
+  const dados = req.body;
+  res.status(201).json({{ recebido: dados }});
+}});
+
+━━━━━━━━━━
 CONTROLE DE QUALIDADE
 ━━━━━━━━━━
 - Se dois cartões testarem a mesma ideia, mantenha apenas o MAIS DESAFIADOR.
 - Evite cartões que apenas repitam frases do texto original.
+- Para código: prefira exemplos práticos e realistas, não abstratos.
 
 ━━━━━━━━━━
 MODO DE GERAÇÃO
 ━━━━━━━━━━
-Modo: {MODO}
+Modo: $MODO
 
 - Se MANUAL:
-  Gere exatamente {QTD} flashcards.
+  Gere exatamente $QTD flashcards.
 
 - Se AUTOMÁTICO:
   Decida a quantidade ideal de flashcards, priorizando:
@@ -196,18 +230,19 @@ REGRAS ESTRITAS:
 5. NÃO numere os cartões.
 6. Cada cartão deve começar com "Q:" e ter "A:" na linha seguinte.
 7. Separe cada cartão com UMA linha em branco.
+8. Para código na resposta, coloque-o logo após "A:" (pode ter múltiplas linhas).
 
 Formato:
 Q: <pergunta>
-A: <resposta curta e objetiva>
+A: <resposta curta OU código>
 
 Q: <pergunta>
-A: <resposta curta e objetiva>
+A: <resposta curta OU código>
 
 ━━━━━━━━━━
 TEXTO PARA ANÁLISE
 ━━━━━━━━━━
-{TEXTO}
+$TEXTO
 """
 
 PROMPT_HARD = """
@@ -225,18 +260,77 @@ REGRAS HARD (OBRIGATÓRIAS)
   - "O que acontece se...?"
   - "Qual a consequência de...?"
   - "Por que ... (com justificativa causal)?"
+  - "Como implementar ... em código?"
   - "Como aplicar ... em uma situação concreta?"
   - "Diferencie X de Y em um caso prático"
-- Respostas curtas: preferencialmente 1 frase, no máximo 2 frases curtas.
+  - "Qual o erro neste código e como corrigir?"
+  - "Refatore este trecho para..."
+
+━━━━━━━━━━
+REGRAS DE RETENÇÃO
+━━━━━━━━━━
+PARA RESPOSTAS TEXTUAIS:
+- Curtas: preferencialmente 1 frase, no máximo 2 frases curtas.
+- Objetivas e mensuráveis.
+
+PARA RESPOSTAS COM CÓDIGO:
+- O código pode ter múltiplas linhas se necessário.
+- Priorize legibilidade e boas práticas.
+- Inclua apenas o essencial para demonstrar o conceito.
+- NÃO comprima código em 1 linha só para economizar espaço.
+- Uma breve explicação (1 linha) pode acompanhar o código se agregar valor.
+
+━━━━━━━━━━
+REGRAS ADICIONAIS
+━━━━━━━━━━
 - Evite repetir ideias: se dois cartões forem parecidos, mantenha o mais desafiador.
+- Para programação, prefira perguntas que exijam escrever/corrigir/refatorar código.
+- Código deve ser funcional e seguir convenções da linguagem.
+
+━━━━━━━━━━
+EXEMPLO DE CARTÃO HARD — TEXTUAL
+━━━━━━━━━━
+Q: Por que usar índices em colunas frequentemente filtradas pode degradar a performance de INSERTs?
+A: Cada INSERT precisa atualizar todos os índices da tabela, aumentando o tempo de escrita.
+
+Q: Qual o risco de capturar exceções genéricas (except Exception) em Python?
+A: Pode mascarar erros inesperados e dificultar debugging, ocultando a causa real do problema.
+
+━━━━━━━━━━
+EXEMPLO DE CARTÃO HARD — COM CÓDIGO
+━━━━━━━━━━
+Q: Como implementar um decorator em Python que mede o tempo de execução de uma função?
+A:
+import time
+
+def timer(func):
+    def wrapper(*args, **kwargs):
+        start = time.time()
+        result = func(*args, **kwargs)
+        print(f"{{func.__name__}} executou em {{time.time() - start:.4f}}s")
+        return result
+    return wrapper
+
+Q: Como evitar SQL Injection ao fazer uma query com parâmetros em Python (sqlite3)?
+A:
+cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+Usar placeholders (?) e tupla de parâmetros em vez de concatenar strings.
+
+Q: Refatore este código para usar list comprehension:
+resultado = []
+for i in range(10):
+    if i % 2 == 0:
+        resultado.append(i ** 2)
+A:
+resultado = [i ** 2 for i in range(10) if i % 2 == 0]
 
 ━━━━━━━━━━
 MODO DE GERAÇÃO
 ━━━━━━━━━━
-Modo: {MODO}
+Modo: $MODO
 
 - Se MANUAL:
-  Gere exatamente {QTD} flashcards.
+  Gere exatamente $QTD flashcards.
 
 - Se AUTOMÁTICO:
   Decida a quantidade ideal (NEM pouco, NEM redundante), priorizando valor educacional.
@@ -252,18 +346,19 @@ REGRAS ESTRITAS:
 5. NÃO numere os cartões.
 6. Cada cartão deve começar com "Q:" e ter "A:" na linha seguinte.
 7. Separe cada cartão com UMA linha em branco.
+8. Para código na resposta, coloque-o logo após "A:" (pode ter múltiplas linhas).
 
 Formato:
 Q: <pergunta>
-A: <resposta>
+A: <resposta ou código>
 
 Q: <pergunta>
-A: <resposta>
+A: <resposta ou código>
 
 ━━━━━━━━━━
 TEXTO PARA ANÁLISE
 ━━━━━━━━━━
-{TEXTO}
+$TEXTO
 """
 
 REFINE_PROMPT = """
@@ -271,16 +366,36 @@ Você é um revisor extremamente rigoroso de flashcards para Anki.
 
 Tarefa: Refinar os cartões abaixo para maximizar retenção e qualidade, respeitando o texto original.
 
+━━━━━━━━━━
+AÇÕES DE REFINAMENTO
+━━━━━━━━━━
 Você deve:
 - Remover redundâncias (se dois cartões testarem a mesma ideia, mantenha o melhor).
 - Transformar cartões definicionais em aplicação/consequência sempre que possível.
-- Encurtar respostas: preferencialmente 1 frase, no máximo 2 frases curtas.
 - Garantir 1 ideia por cartão.
 - Evitar frases copiadas do texto (reformule).
-- Manter o conteúdo fiel ao texto.
+- Manter o conteúdo fiel ao texto original.
+- Melhorar clareza de código existente se necessário.
 
-Nível de dificuldade: {DIFICULDADE}
-- Se HARD: seja agressivo em converter definição para aplicação, e elimine cartões fáceis.
+━━━━━━━━━━
+REGRAS DE TAMANHO
+━━━━━━━━━━
+RESPOSTAS TEXTUAIS:
+- Encurtar para preferencialmente 1 frase, no máximo 2 frases curtas.
+- Deve ser possível avaliar objetivamente se acertou ou errou.
+
+RESPOSTAS COM CÓDIGO:
+- Código pode ter múltiplas linhas se necessário para clareza.
+- NÃO comprimir código em 1 linha de forma forçada.
+- Manter apenas o código essencial (remover boilerplate desnecessário).
+- Garantir que o código seja funcional e legível.
+- Uma breve explicação (1 linha) pode acompanhar o código se necessário.
+
+━━━━━━━━━━
+NÍVEL DE DIFICULDADE: $DIFICULDADE
+━━━━━━━━━━
+- Se HARD: seja agressivo em converter definição para aplicação, elimine cartões fáceis,
+  prefira cartões que exijam escrever/corrigir/analisar código.
 - Se NORMAL: mantenha equilíbrio entre clareza e desafio.
 
 ━━━━━━━━━━
@@ -298,172 +413,176 @@ REGRAS ESTRITAS:
 
 Formato:
 Q: <pergunta>
-A: <resposta>
+A: <resposta ou código>
 
 Q: <pergunta>
-A: <resposta>
+A: <resposta ou código>
 
 ━━━━━━━━━━
 TEXTO ORIGINAL (referência)
 ━━━━━━━━━━
-{TEXTO}
+$TEXTO
 
 ━━━━━━━━━━
 CARTÕES PARA REFINAR
 ━━━━━━━━━━
-{CARDS}
+$CARDS
 """
 
 
+
 # ╔═══════════════════════════════════════════════════════════════════════════════╗
-# ║  FUNÇÕES DE PARSING E SCORING                                                 ║
+# ║  FUNÇÕES DE PARSING E FORMATAÇÃO                                              ║
 # ╚═══════════════════════════════════════════════════════════════════════════════╝
 
 def parse_cards(raw: str):
+    """
+    Parser robusto que extrai flashcards do formato Q:/A:
+    Suporta respostas multilinhas (para código).
+    Corrigido para não confundir Q:/A: dentro de código.
+    """
     if not raw:
         return []
     
-    raw = raw.replace("\r\n", "\n").strip()
-    lines_clean = []
-    in_code_block = False
-    
-    for ln in raw.split("\n"):
-        s = ln.strip()
-        if s.startswith("```"):
-            in_code_block = not in_code_block
-            continue
-        if in_code_block:
-            continue
-        if s.startswith("[Score:") or s.startswith("#"):
-            continue
-        if s.startswith("---") or s.startswith("***") or s.startswith("==="):
-            continue
-        if s.startswith("**") and s.endswith("**") and len(s) > 4:
-            continue
-        if s.lower().startswith("flashcard") and ":" not in s[10:]:
-            continue
-        if s.lower().startswith("cartão") or s.lower().startswith("cartao"):
-            if ":" not in s[7:]:
-                continue
-        if s.lower().startswith("aqui estão") or s.lower().startswith("aqui estao"):
-            continue
-        if s.lower().startswith("seguem") or s.lower().startswith("abaixo"):
-            continue
-        if s.lower().startswith("espero que"):
-            continue
-        lines_clean.append(ln)
-    
-    raw = "\n".join(lines_clean).strip()
-    raw = re.sub(r"\*\*\s*(Q:)", r"\1", raw)
-    raw = re.sub(r"\*\*\s*(A:)", r"\1", raw)
-    raw = re.sub(r"(Q:)\s*\*\*", r"\1 ", raw)
-    raw = re.sub(r"(A:)\s*\*\*", r"\1 ", raw)
-    raw = raw.replace("**", "")
-    raw = re.sub(r"^\d+[\.\)]\s*(Q:)", r"\1", raw, flags=re.MULTILINE)
-    
-    blocks = re.split(r"\n\s*\n+", raw)
-    cards = []
-    
-    for blk in blocks:
-        blk = blk.strip()
-        if not blk:
-            continue
+    try:
+        raw = raw.replace("\r\n", "\n").strip()
         
-        q_lines, a_lines = [], []
-        cur = None
+        # Limpar markdown e lixo
+        raw = re.sub(r"```[\w]*\n?", "", raw)  # Remove blocos de código markdown
+        raw = raw.replace("**", "")
+        raw = re.sub(r"^\d+[\.\)]\s*(Q:)", r"\1", raw, flags=re.MULTILINE)
         
-        for ln in blk.split("\n"):
-            s = ln.strip()
-            if not s:
+        # Remover linhas de introdução/conclusão comuns
+        lines_clean = []
+        for ln in raw.split("\n"):
+            s = ln.strip().lower()
+            if s.startswith("[score:") or s.startswith("#"):
                 continue
+            if s.startswith("---") or s.startswith("***") or s.startswith("==="):
+                continue
+            if s.startswith("aqui estão") or s.startswith("aqui estao"):
+                continue
+            if s.startswith("seguem") or s.startswith("abaixo"):
+                continue
+            if s.startswith("espero que"):
+                continue
+            lines_clean.append(ln)
+        
+        raw = "\n".join(lines_clean)
+        
+        cards = []
+        
+        # CORREÇÃO: Regex mais restritiva
+        # Q: DEVE estar no início absoluto da linha (sem indentação significativa)
+        # Isso evita capturar Q:/A: dentro de código indentado
+        q_pattern = re.compile(r"^(Q|P|Pergunta)\s*:", re.IGNORECASE | re.MULTILINE)
+        
+        matches = list(q_pattern.finditer(raw))
+        
+        if not matches:
+            return []
+        
+        for i, match in enumerate(matches):
+            start = match.start()
             
-            q_match = re.match(r"^(Q|P|Pergunta)\s*:\s*(.*)$", s, re.IGNORECASE)
-            a_match = re.match(r"^(A|R|Resposta)\s*:\s*(.*)$", s, re.IGNORECASE)
-            
-            if q_match:
-                cur = "Q"
-                content = q_match.group(2).strip()
-                if content:
-                    q_lines.append(content)
-            elif a_match:
-                cur = "A"
-                content = a_match.group(2).strip()
-                if content:
-                    a_lines.append(content)
+            if i + 1 < len(matches):
+                end = matches[i + 1].start()
             else:
-                if cur == "Q":
-                    q_lines.append(s)
-                elif cur == "A":
-                    a_lines.append(s)
+                end = len(raw)
+            
+            block = raw[start:end].strip()
+            
+            q_lines = []
+            a_lines = []
+            cur = None
+            in_code_block = False  # Flag para detectar blocos de código
+            
+            for ln in block.split("\n"):
+                ln_original = ln  # Preservar original para código
+                ln_stripped = ln.strip()
+                
+                # Detectar se estamos em um bloco de código (indentação >= 4 espaços ou tab)
+                is_indented = ln.startswith("    ") or ln.startswith("\t")
+                
+                # CORREÇÃO CRÍTICA: 
+                # Só reconhecer Q:/A: se:
+                # 1. Está no início da linha (sem indentação)
+                # 2. Não estamos no meio de código
+                
+                # Q: só no início, sem indentação
+                q_match = re.match(r"^(Q|P|Pergunta)\s*:\s*(.*)$", ln_stripped, re.IGNORECASE)
+                # A: só no início, sem indentação significativa
+                a_match = re.match(r"^(A|R|Resposta)\s*:\s*(.*)$", ln_stripped, re.IGNORECASE)
+                
+                # Se a linha está indentada E já estamos em modo resposta, é código
+                if cur == "A" and is_indented:
+                    a_lines.append(ln_original.rstrip())
+                    continue
+                
+                # Se a linha começa com caracteres típicos de código, é continuação
+                if cur == "A" and ln_stripped and ln_stripped[0] in "{}[]();=><|&+-*/\\@#$%^":
+                    a_lines.append(ln_original.rstrip())
+                    continue
+                
+                # Verificar se Q: é válido (início do card)
+                if q_match and cur is None:
+                    cur = "Q"
+                    content = q_match.group(2).strip()
+                    if content:
+                        q_lines.append(content)
+                        
+                # Verificar se A: é válido (não indentado, após Q:)
+                elif a_match and cur == "Q" and not is_indented:
+                    cur = "A"
+                    content = a_match.group(2).strip()
+                    if content:
+                        a_lines.append(content)
+                        
+                # Linha de continuação
+                else:
+                    if cur == "Q" and ln_stripped:
+                        # Pergunta geralmente não tem múltiplas linhas
+                        q_lines.append(ln_stripped)
+                    elif cur == "A":
+                        # Resposta pode ter múltiplas linhas (código)
+                        # Preservar formatação original
+                        a_lines.append(ln_original.rstrip())
+            
+            # Limpar linhas vazias no início e final da resposta
+            while a_lines and not a_lines[0].strip():
+                a_lines.pop(0)
+            while a_lines and not a_lines[-1].strip():
+                a_lines.pop()
+            
+            # Montar pergunta e resposta
+            q = re.sub(r"\s+", " ", " ".join(q_lines).strip())
+            a = "\n".join(a_lines).strip()
+            
+            if q and a:
+                cards.append({"q": q, "a": a})
         
-        q = re.sub(r"\s+", " ", " ".join(q_lines).strip())
-        a = re.sub(r"\s+", " ", " ".join(a_lines).strip())
+        return cards
         
-        if q and a:
-            cards.append({"q": q, "a": a})
-    
-    return cards
+    except Exception as e:
+        # Log para debug - em produção, usar logging
+        print(f"[parse_cards] Erro: {type(e).__name__}: {e}")
+        return []
 
-
-def word_count(s: str) -> int:
-    s = re.sub(r"\s+", " ", s).strip()
-    return len(s.split(" ")) if s else 0
-
-
-def score_card(q: str, a: str, hard: bool) -> float:
-    q_l, a_l = q.lower().strip(), a.lower().strip()
-    score = 5.0
-
-    aw = word_count(a)
-    if aw <= 12:
-        score += 2.0
-    elif aw <= 20:
-        score += 1.0
-    elif aw <= 28:
-        score += 0.2
-    else:
-        score -= 1.5
-
-    good_starts = [
-        "por que", "como", "qual a consequência", "qual a consequencia",
-        "o que acontece", "em que aspecto", "diferencie", "compare",
-        "qual a diferença", "qual a diferenca", "qual seria a consequência",
-        "o que pode ocorrer", "como aplicar", "por que é", "por que e",
-        "quando devemos", "em que situação", "qual o impacto", "qual o efeito"
-    ]
-    if any(q_l.startswith(gs) for gs in good_starts):
-        score += 1.8
-
-    if q_l.startswith("o que é") or q_l.startswith("o que e"):
-        score -= 2.5 if hard else 1.8
-
-    generic_markers = [
-        "em nossas vidas", "no dia a dia", "no cotidiano", "de forma geral",
-        "qual o papel", "explique", "descreva", "fale sobre", "cite"
-    ]
-    if any(m in q_l for m in generic_markers):
-        score -= 1.0 if hard else 0.6
-
-    practical_markers = [
-        "ao escolher", "ao rodar", "ao desenvolver", "em um sistema",
-        "em um aplicativo", "em um jogo", "servidor", "banco de dados",
-        "front-end", "back-end", "hardware", "requisitos", "teste",
-        "segurança", "desempenho", "incompatibilidade", "usuário", "projeto"
-    ]
-    if any(m in q_l for m in practical_markers):
-        score += 0.9
-
-    if any(x in a_l for x in ["porque", "pois", "assim", "portanto", "logo", "então"]):
-        score += 0.4
-
-    return round(max(0, min(10, score)), 1)
 
 
 def format_cards_for_export_tab(cards):
-    return "\n".join(f"{c['q']}\t{c['a']}" for c in cards) + ("\n" if cards else "")
+    """Formata cards para exportação em formato tabulado (Anki/Noji)."""
+    lines = []
+    for c in cards:
+        # Substituir quebras de linha por <br> para o Anki
+        q = c['q'].replace('\n', '<br>')
+        a = c['a'].replace('\n', '<br>')
+        lines.append(f"{q}\t{a}")
+    return "\n".join(lines) + ("\n" if cards else "")
 
 
 def format_cards_for_refine(cards):
+    """Formata cards para envio ao prompt de refinamento."""
     lines = []
     for c in cards:
         lines.extend([f"Q: {c['q']}", f"A: {c['a']}", ""])
@@ -471,13 +590,13 @@ def format_cards_for_refine(cards):
 
 
 # ╔═══════════════════════════════════════════════════════════════════════════════╗
-# ║  CLASSE PRINCIPAL — AnkiLabApp (ESCALA COMPACTA PARA NOTEBOOKS)               ║
+# ║  CLASSE PRINCIPAL — AnkiLabApp                                                ║
 # ╚═══════════════════════════════════════════════════════════════════════════════╝
 
 class AnkiLabApp:
     """
-    Aplicação AnkiLab com escala compacta para notebooks.
-    Proporções reduzidas em ~25% mantendo o layout idêntico.
+    Aplicação AnkiLab - Gerador de Flashcards com IA.
+    Interface compacta otimizada para notebooks.
     """
     
     def __init__(self, root):
@@ -485,11 +604,9 @@ class AnkiLabApp:
         self.theme = NeuroTheme
         self.cards_data = []
         
-        # ══════════════════════════════════════════════════════════════════════
-        # ESCALA COMPACTA: 880x540
-        # ══════════════════════════════════════════════════════════════════════
+        # Configuração da janela
         self.root.title(f"{APP_NAME} • {APP_TAGLINE}")
-        self.root.geometry("880x650")
+        self.root.geometry("880x620")
         self.root.minsize(750, 450)
         self.root.configure(bg=self.theme.BG_MAIN)
         
@@ -498,7 +615,6 @@ class AnkiLabApp:
         self.hard_var = tk.BooleanVar(value=False)
         self.refine_var = tk.BooleanVar(value=False)
         self.cards_count_var = tk.StringVar(value="0")
-        self.avg_score_var = tk.StringVar(value="—")
         
         # Construir interface
         self._build_header()
@@ -510,7 +626,7 @@ class AnkiLabApp:
         self._update_char_counter()
     
     # ═══════════════════════════════════════════════════════════════════════════
-    #  HEADER (altura: 40px)
+    #  HEADER
     # ═══════════════════════════════════════════════════════════════════════════
     
     def _build_header(self):
@@ -567,7 +683,7 @@ class AnkiLabApp:
         tk.Frame(self.root, bg=self.theme.BORDER, height=1).pack(fill="x", side="top")
     
     # ═══════════════════════════════════════════════════════════════════════════
-    #  MAIN CONTENT (padding: 10px)
+    #  MAIN CONTENT
     # ═══════════════════════════════════════════════════════════════════════════
     
     def _build_main_content(self):
@@ -586,7 +702,7 @@ class AnkiLabApp:
         left_panel = tk.Frame(parent, bg=self.theme.BG_SECONDARY)
         left_panel.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
         
-        # Header do painel (altura: 32px)
+        # Header do painel
         panel_header = tk.Frame(left_panel, bg=self.theme.BG_TERTIARY, height=32)
         panel_header.pack(fill="x", side="top")
         panel_header.pack_propagate(False)
@@ -605,7 +721,7 @@ class AnkiLabApp:
             bg=self.theme.BG_TERTIARY, fg=self.theme.TEXT_PRIMARY
         ).pack(side="left")
         
-        # Área de texto (padding: 8px)
+        # Área de texto
         text_frame = tk.Frame(left_panel, bg=self.theme.BG_SECONDARY, padx=8, pady=6)
         text_frame.pack(fill="both", expand=True)
         
@@ -632,7 +748,7 @@ class AnkiLabApp:
         self.text_input.bind("<FocusIn>", lambda e: text_border.config(bg=self.theme.BORDER_FOCUS))
         self.text_input.bind("<FocusOut>", lambda e: text_border.config(bg=self.theme.BORDER))
         
-        # Barra inferior (altura: 34px)
+        # Barra inferior
         bottom_bar = tk.Frame(left_panel, bg=self.theme.BG_TERTIARY, height=34)
         bottom_bar.pack(fill="x", side="bottom")
         bottom_bar.pack_propagate(False)
@@ -697,7 +813,7 @@ class AnkiLabApp:
         right_panel = tk.Frame(parent, bg=self.theme.BG_SECONDARY)
         right_panel.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
         
-        # Header com métricas (altura: 32px)
+        # Header com contador de cards
         panel_header = tk.Frame(right_panel, bg=self.theme.BG_TERTIARY, height=32)
         panel_header.pack(fill="x", side="top")
         panel_header.pack_propagate(False)
@@ -720,13 +836,9 @@ class AnkiLabApp:
             bg=self.theme.BG_TERTIARY, fg=self.theme.TEXT_PRIMARY
         ).pack(side="left")
         
-        # Métricas
-        metrics_frame = tk.Frame(header_content, bg=self.theme.BG_TERTIARY)
-        metrics_frame.pack(side="right", fill="y")
-        
         # Badge contagem
-        count_badge = tk.Frame(metrics_frame, bg=self.theme.BG_MAIN, padx=6, pady=1)
-        count_badge.pack(side="left", padx=(0, 6))
+        count_badge = tk.Frame(header_content, bg=self.theme.BG_MAIN, padx=6, pady=1)
+        count_badge.pack(side="right")
         
         self.cards_count_label = tk.Label(
             count_badge, textvariable=self.cards_count_var,
@@ -739,29 +851,6 @@ class AnkiLabApp:
             count_badge, text=" cards",
             font=self.theme.get_ui_font(7),
             bg=self.theme.BG_MAIN, fg=self.theme.TEXT_SECONDARY
-        ).pack(side="left")
-        
-        # Badge score
-        score_badge = tk.Frame(metrics_frame, bg=self.theme.BG_MAIN, padx=6, pady=1)
-        score_badge.pack(side="left")
-        
-        tk.Label(
-            score_badge, text="Score: ",
-            font=self.theme.get_ui_font(7),
-            bg=self.theme.BG_MAIN, fg=self.theme.TEXT_SECONDARY
-        ).pack(side="left")
-        
-        self.avg_score_label = tk.Label(
-            score_badge, textvariable=self.avg_score_var,
-            font=self.theme.get_mono_font(8, "bold"),
-            bg=self.theme.BG_MAIN, fg=self.theme.ACCENT_SECONDARY
-        )
-        self.avg_score_label.pack(side="left")
-        
-        tk.Label(
-            score_badge, text="/10",
-            font=self.theme.get_ui_font(6),
-            bg=self.theme.BG_MAIN, fg=self.theme.TEXT_MUTED
         ).pack(side="left")
         
         # Área de preview
@@ -793,17 +882,17 @@ class AnkiLabApp:
         
         # Tags de formatação
         self.preview.tag_configure("header", foreground=self.theme.CARD_HEADER, font=self.theme.get_mono_font(8, "bold"))
-        self.preview.tag_configure("score", foreground=self.theme.CARD_SCORE, font=self.theme.get_mono_font(7, "bold"))
         self.preview.tag_configure("pergunta", foreground=self.theme.CARD_Q, font=self.theme.get_mono_font(8, "bold"))
         self.preview.tag_configure("resposta", foreground=self.theme.CARD_A, font=self.theme.get_mono_font(8))
         self.preview.tag_configure("separator", foreground=self.theme.TEXT_MUTED, font=self.theme.get_mono_font(6))
         self.preview.tag_configure("processing", foreground=self.theme.ACCENT_PRIMARY, font=self.theme.get_mono_font(8), justify="center")
         self.preview.tag_configure("error", foreground=self.theme.ERROR, font=self.theme.get_mono_font(8))
+        self.preview.tag_configure("card_num", foreground=self.theme.ACCENT_SECONDARY, font=self.theme.get_mono_font(7, "bold"))
         
         self._show_preview_placeholder()
     
     # ═══════════════════════════════════════════════════════════════════════════
-    #  OPTIONS PANEL (padding: 10px)
+    #  OPTIONS PANEL
     # ═══════════════════════════════════════════════════════════════════════════
     
     def _build_options_panel(self):
@@ -916,7 +1005,7 @@ class AnkiLabApp:
             self.mode_label.config(text="MODO: NORMAL", fg=self.theme.ACCENT_PRIMARY)
     
     # ═══════════════════════════════════════════════════════════════════════════
-    #  ACTIONS BAR (padding: 10px, botões compactos)
+    #  ACTIONS BAR
     # ═══════════════════════════════════════════════════════════════════════════
     
     def _build_actions_bar(self):
@@ -996,7 +1085,7 @@ class AnkiLabApp:
         self.root.bind("<Control-Return>", lambda e: self.gerar_cards())
     
     # ═══════════════════════════════════════════════════════════════════════════
-    #  FOOTER (altura: 26px)
+    #  FOOTER
     # ═══════════════════════════════════════════════════════════════════════════
     
     def _build_footer(self):
@@ -1055,14 +1144,14 @@ class AnkiLabApp:
    │   "GERAR FLASHCARDS"         │
    │                              │
    │   Os cards aparecerão aqui   │
-   │   com scores de qualidade    │
    │                              │
    ╰──────────────────────────────╯
 """
         self.preview.insert("1.0", placeholder, "processing")
         self.preview.config(state="disabled")
     
-    def _insert_preview_formatted(self, cards, hard):
+    def _insert_preview_formatted(self, cards):
+        """Insere os cards formatados no preview."""
         self.preview.config(state="normal")
         self.preview.delete("1.0", tk.END)
         
@@ -1071,22 +1160,25 @@ class AnkiLabApp:
             self.preview.config(state="disabled")
             return
         
-        scores = [score_card(c["q"], c["a"], hard) for c in cards]
-        avg = round(sum(scores) / len(scores), 1) if scores else 0.0
-        
         self.cards_count_var.set(str(len(cards)))
-        self.avg_score_var.set(str(avg))
         self.cards_data = cards
         
         for i, c in enumerate(cards):
-            sc = scores[i]
+            # Número do card
+            self.preview.insert(tk.END, f"┌─ Card {i + 1}\n", "card_num")
             
-            # Score badge
-            quality = "●●●●● Excelente" if sc >= 8.0 else "●●●●○ Bom" if sc >= 6.5 else "●●●○○ Regular" if sc >= 5.0 else "●●○○○ Revisar"
-            self.preview.insert(tk.END, f"┌─ Score: {sc}/10 {quality}\n", "score")
+            # Pergunta
             self.preview.insert(tk.END, f"│ Q: {c['q']}\n", "pergunta")
-            self.preview.insert(tk.END, f"│ A: {c['a']}\n", "resposta")
             
+            # Resposta (pode ter múltiplas linhas para código)
+            a_lines = c['a'].split('\n')
+            for j, line in enumerate(a_lines):
+                if j == 0:
+                    self.preview.insert(tk.END, f"│ A: {line}\n", "resposta")
+                else:
+                    self.preview.insert(tk.END, f"│    {line}\n", "resposta")
+            
+            # Separador
             if i < len(cards) - 1:
                 self.preview.insert(tk.END, "└─────────────────────────────\n\n", "separator")
             else:
@@ -1108,7 +1200,12 @@ class AnkiLabApp:
             self.status_icon.config(fg=self.theme.SUCCESS)
     
     def _update_status(self, msg: str, status_type: str = "info"):
-        color_map = {"info": self.theme.INFO, "success": self.theme.SUCCESS, "warning": self.theme.WARNING, "error": self.theme.ERROR}
+        color_map = {
+            "info": self.theme.INFO,
+            "success": self.theme.SUCCESS,
+            "warning": self.theme.WARNING,
+            "error": self.theme.ERROR
+        }
         self.root.after(0, lambda: (
             self.status_icon.config(fg=color_map.get(status_type, self.theme.INFO)),
             self.status_label.config(text=msg)
@@ -1138,7 +1235,6 @@ class AnkiLabApp:
         self.preview.config(state="disabled")
         
         self.cards_count_var.set("...")
-        self.avg_score_var.set("...")
 
         def chamar_api():
             try:
@@ -1146,7 +1242,8 @@ class AnkiLabApp:
                 modo = "AUTOMÁTICO" if qtd == "AUTO" else "MANUAL"
 
                 base_prompt = PROMPT_HARD if hard else PROMPT_NORMAL
-                prompt = base_prompt.format(MODO=modo, QTD=qtd, TEXTO=texto)
+                # CORREÇÃO: Usar Template em vez de .format()
+                prompt = Template(base_prompt).safe_substitute(MODO=modo, QTD=qtd, TEXTO=texto)
 
                 self._update_status("Gerando (1ª passada)...", "warning")
                 
@@ -1165,9 +1262,11 @@ class AnkiLabApp:
                 if do_refine and len(cards1) >= 1:
                     self._update_status("Refinando (2ª passada)...", "warning")
                     cards_text = format_cards_for_refine(cards1)
-                    refine_prompt = REFINE_PROMPT.format(
+                    # CORREÇÃO: Usar Template em vez de .format()
+                    refine_prompt = Template(REFINE_PROMPT).safe_substitute(
                         DIFICULDADE=("HARD" if hard else "NORMAL"),
-                        TEXTO=texto, CARDS=cards_text
+                        TEXTO=texto, 
+                        CARDS=cards_text
                     )
                     resp2 = client.chat.completions.create(
                         model=MODEL_NAME,
@@ -1184,10 +1283,11 @@ class AnkiLabApp:
             except Exception as e:
                 self.root.after(0, lambda m=str(e): self._erro_geracao(m))
 
+
         threading.Thread(target=chamar_api, daemon=True).start()
     
     def _finalizar_geracao(self, cards, hard, refined):
-        self._insert_preview_formatted(cards, hard)
+        self._insert_preview_formatted(cards)
         mode_txt = "HARD" if hard else "NORMAL"
         ref_txt = " + refinado" if refined else ""
         self._set_busy(False)
@@ -1199,7 +1299,6 @@ class AnkiLabApp:
         self.preview.insert(tk.END, f"\n  ❌ Erro:\n\n  {mensagem}", "error")
         self.preview.config(state="disabled")
         self.cards_count_var.set("0")
-        self.avg_score_var.set("—")
         self._set_busy(False)
         self._update_status("Erro na geração", "error")
         messagebox.showerror("Erro", mensagem)
@@ -1239,11 +1338,40 @@ class AnkiLabApp:
                     "qfmt": "{{Frente}}",
                     "afmt": '{{FrontSide}}<hr id="answer">{{Verso}}',
                 }],
-                css=".card { font-family: 'Segoe UI', Arial; font-size: 20px; text-align: center; color: #e6edf3; background: #0f1419; padding: 24px; }"
+                css="""
+                    .card {
+                        font-family: 'Segoe UI', Arial, sans-serif;
+                        font-size: 18px;
+                        text-align: left;
+                        color: #e6edf3;
+                        background: #0f1419;
+                        padding: 24px;
+                        line-height: 1.5;
+                    }
+                    pre, code {
+                        font-family: 'Consolas', 'Cascadia Code', monospace;
+                        background: #1a1f26;
+                        padding: 12px;
+                        border-radius: 6px;
+                        display: block;
+                        overflow-x: auto;
+                        white-space: pre;
+                    }
+                """
             )
             deck = genanki.Deck(abs(hash(deck_name)) % (10 ** 10), deck_name)
             for c in self.cards_data:
-                deck.add_note(genanki.Note(model=modelo, fields=[c["q"], c["a"]], guid=genanki.guid_for(c["q"], c["a"])))
+                # Formatar resposta: detectar código e envolver em <pre>
+                answer = c["a"]
+                # Se parece código (contém indentação, {}, (), etc.), envolver em <pre>
+                if '\n' in answer or any(char in answer for char in ['def ', 'function ', '{', '=>', 'import ', 'const ', 'let ', 'var ']):
+                    answer = f"<pre><code>{answer}</code></pre>"
+                
+                deck.add_note(genanki.Note(
+                    model=modelo,
+                    fields=[c["q"], answer],
+                    guid=genanki.guid_for(c["q"], c["a"])
+                ))
             genanki.Package(deck).write_to_file(path)
 
             self._update_status(f"Exportado: {len(self.cards_data)} cards", "success")
@@ -1285,7 +1413,6 @@ class AnkiLabApp:
         self.refine_var.set(False)
         self.cards_data = []
         self.cards_count_var.set("0")
-        self.avg_score_var.set("—")
         self._show_preview_placeholder()
         self._update_char_counter()
         self._update_mode_display()
@@ -1293,7 +1420,7 @@ class AnkiLabApp:
 
 
 # ╔═══════════════════════════════════════════════════════════════════════════════╗
-# ║  DIALOG DE EXPORTAÇÃO (escala compacta)                                       ║
+# ║  DIALOG DE EXPORTAÇÃO                                                         ║
 # ╚═══════════════════════════════════════════════════════════════════════════════╝
 
 class ExportDialog(tk.Toplevel):
