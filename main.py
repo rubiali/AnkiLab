@@ -795,10 +795,12 @@ def format_cards_for_export_tab(cards):
     """Formata cards para exportação em formato tabulado (Anki/Noji)."""
     lines = []
     for c in cards:
-        q = c['q'].replace('\n', '<br>')
-        a = c['a'].replace('\n', '<br>')
+        # Normalizar: primeiro converte \n literal para quebra real, depois para <br>
+        q = c['q'].replace('\\n', '\n').replace('\n', '<br>')
+        a = c['a'].replace('\\n', '\n').replace('\n', '<br>')
         lines.append(f"{q}\t{a}")
     return "\n".join(lines) + ("\n" if cards else "")
+
 
 
 def format_cards_for_prompt(cards):
@@ -2051,13 +2053,13 @@ class AnkiLabApp:
             )
             deck = genanki.Deck(abs(hash(deck_name)) % (10 ** 10), deck_name)
             for c in cards:
-                answer = c["a"]
+                answer = c["a"].replace('\\n', '\n')
                 if '\n' in answer or any(char in answer for char in ['def ', 'function ', '{', '=>', 'import ', 'const ', 'let ', 'var ']):
                     answer = f"<pre><code>{answer}</code></pre>"
                 
                 deck.add_note(genanki.Note(
                     model=modelo,
-                    fields=[c["q"], answer],
+                    fields=[c["q"].replace('\\n', '\n'), answer],  # Também normalizar pergunta
                     guid=genanki.guid_for(c["q"], c["a"])
                 ))
             genanki.Package(deck).write_to_file(path)
