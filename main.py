@@ -987,7 +987,7 @@ class AnkiLabApp:
         ).pack(side="left", padx=(0, 3))
         
         tk.Label(
-            model_frame, text=f"{MODEL_NAME} / {MODEL_ADVANCED}",
+            model_frame, text=f"{MODEL_NAME} / {MODEL_ADVANCED} / {MODEL_REFINEMENT}",
             font=self.theme.get_mono_font(7),
             bg=self.theme.BG_TERTIARY, fg=self.theme.TEXT_PRIMARY
         ).pack(side="left")
