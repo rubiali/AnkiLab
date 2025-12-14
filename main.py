@@ -100,7 +100,8 @@ if not api_key:
 
 client = OpenAI(api_key=api_key)
 MODEL_NAME = "gpt-4.1-mini"
-MODEL_ADVANCED = "gpt-4.1"  # Modelo avançado para revisão
+MODEL_REFINEMENT = "gpt-4o-mini"  # Modelo intermediário para refinamento
+MODEL_ADVANCED = "gpt-4o"  # Modelo avançado para revisão
 APP_VERSION = "v3.0"
 APP_NAME = "AnkiLab"
 APP_TAGLINE = "Cognitive Flashcard Engine"
@@ -564,7 +565,6 @@ AÇÕES OBRIGATÓRIAS
 4) ADICIONAR cards para:
    - Cobrir lacunas críticas do tema
    - Criar cards de aplicação onde só há definição
-   - Gere o máximo de cards necessários para cobrir todas as lacunas.
 
 ━━━━━━━━━━
 REGRAS DE QUALIDADE
@@ -576,6 +576,16 @@ REGRAS DE QUALIDADE
 - Perguntas diretas, sem floreios
 
 ━━━━━━━━━━
+REGRAS CRÍTICAS DE SAÍDA
+━━━━━━━━━━
+⚠️ ATENÇÃO MÁXIMA:
+- NÃO DUPLIQUE cards! Cada card deve aparecer UMA ÚNICA VEZ.
+- A contagem de "Total final" nas estatísticas DEVE bater com o número real de cards listados.
+- Confira ANTES de responder: conte os cards e valide o número.
+- Se um card foi modificado, liste apenas a versão NOVA (não a antiga).
+- Se um card foi dividido, liste apenas os cards RESULTANTES.
+
+━━━━━━━━━━
 FORMATO DE SAÍDA (OBRIGATÓRIO)
 ━━━━━━━━━━
 
@@ -583,54 +593,43 @@ Primeiro, forneça o RELATÓRIO DE ALTERAÇÕES, depois os CARDS FINAIS.
 
 === RELATÓRIO DE ALTERAÇÕES ===
 
-REMOVIDOS ($REMOVED_COUNT cards):
+REMOVIDOS (X cards):
 • "[início da pergunta...]" — Motivo: [razão]
-• ...
 
-MODIFICADOS ($MODIFIED_COUNT cards):
+MODIFICADOS (X cards):
 • "[pergunta original...]" → "[nova pergunta...]" — Alteração: [o que mudou]
-• ...
 
-DIVIDIDOS ($SPLIT_COUNT cards):
-• "[pergunta original...]" → Dividido em $N cards
-• ...
+DIVIDIDOS (X cards):
+• "[pergunta original...]" → Dividido em N cards
 
-ADICIONADOS ($ADDED_COUNT cards):
+ADICIONADOS (X cards):
 • "[nova pergunta...]" — Motivo: [lacuna coberta]
-• ...
 
 ESTATÍSTICAS:
-- Cards originais: $ORIGINAL
-- Cards removidos: $REMOVED
-- Cards modificados: $MODIFIED
-- Cards divididos: $SPLIT (geraram $NEW_FROM_SPLIT)
-- Cards adicionados: $ADDED
-- Total final: $FINAL
+- Cards originais: [número]
+- Cards removidos: [número]
+- Cards modificados: [número]
+- Cards divididos: [número] (geraram [número] cards)
+- Cards adicionados: [número]
+- Total final: [DEVE SER = originais - removidos + novos_de_divisao + adicionados]
 
 === CARDS FINAIS ===
 
-Q: [pergunta]
-A: [resposta]
+⚠️ LISTA ÚNICA - NÃO REPETIR NENHUM CARD
 
 Q: [pergunta]
 A: [resposta]
 
-...
+Q: [pergunta]
+A: [resposta]
 
-━━━━━━━━━━
-REGRAS CRÍTICAS
-━━━━━━━━━━
-- NÃO invente informações que não existem no campo do tema.
-- Mantenha fidelidade ao conteúdo original quando possível.
-- Seja AGRESSIVO em remover cards ruins — qualidade > quantidade.
-- O relatório deve ser PRECISO — não invente alterações que não fez.
+[... todos os cards UMA vez cada ...]
 
 ━━━━━━━━━━
 DECK PARA REVISÃO
 ━━━━━━━━━━
 $CARDS
 """
-
 
 # ╔═══════════════════════════════════════════════════════════════════════════════╗
 # ║  FUNÇÕES DE PARSING E FORMATAÇÃO                                              ║
@@ -1948,7 +1947,7 @@ class AnkiLabApp:
                 resp1 = client.chat.completions.create(
                     model=MODEL_NAME,
                     messages=[{"role": "user", "content": prompt}],
-                    temperature=0.4,
+                    temperature=0.45,
                     max_tokens=15000
                 )
                 raw1 = (resp1.choices[0].message.content or "").strip()
@@ -1967,7 +1966,7 @@ class AnkiLabApp:
                         CARDS=cards_text
                     )
                     resp2 = client.chat.completions.create(
-                        model=MODEL_NAME,
+                        model=MODEL_REFINEMENT,
                         messages=[{"role": "user", "content": refine_prompt}],
                         temperature=0.3,
                         max_tokens=15000
@@ -2204,7 +2203,7 @@ class AnkiLabApp:
                     model=MODEL_ADVANCED,
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.3,
-                    max_tokens=30000  
+                    max_tokens=16000  
                 )
                 
                 response_text = (resp.choices[0].message.content or "").strip()
