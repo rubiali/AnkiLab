@@ -1940,7 +1940,8 @@ class AnkiLabApp:
                 resp1 = client.chat.completions.create(
                     model=MODEL_NAME,
                     messages=[{"role": "user", "content": prompt}],
-                    temperature=0.4
+                    temperature=0.4,
+                    max_tokens=15000
                 )
                 raw1 = (resp1.choices[0].message.content or "").strip()
                 cards1 = parse_cards(raw1)
@@ -1960,7 +1961,8 @@ class AnkiLabApp:
                     resp2 = client.chat.completions.create(
                         model=MODEL_NAME,
                         messages=[{"role": "user", "content": refine_prompt}],
-                        temperature=0.3
+                        temperature=0.3,
+                        max_tokens=15000
                     )
                     raw2 = (resp2.choices[0].message.content or "").strip()
                     cards2 = parse_cards(raw2)
