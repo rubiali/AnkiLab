@@ -457,7 +457,7 @@ O QUE VOCÊ DEVE FAZER
 ━━━━━━━━━━
 
 1) CONCEITOS COBERTOS:
-   Liste os principais conceitos que JÁ ESTÃO no deck (máximo 15 itens, seja conciso).
+   Liste os principais conceitos que JÁ ESTÃO no deck (seja conciso).
 
 2) LACUNAS IDENTIFICADAS:
    Liste conceitos ESSENCIAIS do tema que estão FALTANDO ou foram abordados superficialmente.
@@ -558,7 +558,7 @@ AÇÕES OBRIGATÓRIAS
 4) ADICIONAR cards para:
    - Cobrir lacunas críticas do tema
    - Criar cards de aplicação onde só há definição
-   (Máximo 15 novos cards)
+   - Gere o máximo de cards necessários para cobrir todas as lacunas.
 
 ━━━━━━━━━━
 REGRAS DE QUALIDADE
