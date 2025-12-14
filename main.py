@@ -489,6 +489,12 @@ REGRAS CRÍTICAS
   • Preferir aplicação/consequência sobre definição
   • Código quando relevante (legível, funcional)
 
+É PROIBIDO:
+- Gerar variações do mesmo comando trocando apenas parâmetros
+- Criar séries do tipo:
+  (stash x branch, stash x commit, stash x tag, etc.)
+- Gerar mais de UM card por comando quando a diferença for apenas o alvo
+
 ━━━━━━━━━━
 FORMATO DE SAÍDA (OBRIGATÓRIO)
 ━━━━━━━━━━
