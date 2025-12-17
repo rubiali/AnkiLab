@@ -2329,17 +2329,43 @@ class AnkiLabApp:
         if not self.review_cards_data:
             messagebox.showwarning("Aviso", "Nenhum card para exportar.")
             return
+        
+        # Se estiver no modo auditoria E tiver cards originais carregados,
+        # perguntar se quer exportar só novos ou todos juntos
+        cards_to_export = self.review_cards_data
+        export_label = "novos"
+        
+        if self.review_mode_var.get() == "audit" and self.loaded_csv_cards:
+            escolha = messagebox.askyesnocancel(
+                "Exportar Cards",
+                f"Novos cards sugeridos: {len(self.review_cards_data)}\n"
+                f"Cards originais do deck: {len(self.loaded_csv_cards)}\n\n"
+                f"Deseja incluir os cards ORIGINAIS junto com os novos?\n\n"
+                f"• SIM = Originais + Novos ({len(self.loaded_csv_cards) + len(self.review_cards_data)} cards)\n"
+                f"• NÃO = Apenas Novos ({len(self.review_cards_data)} cards)\n"
+                f"• CANCELAR = Voltar"
+            )
+            
+            if escolha is None:  # Cancelar
+                return
+            elif escolha:  # Sim - incluir originais
+                cards_to_export = self.loaded_csv_cards + self.review_cards_data
+                export_label = "originais + novos"
 
-        dialog = ExportDialog(self.root, len(self.review_cards_data), self.theme, title="Exportar Resultado da Revisão")
+        dialog = ExportDialog(self.root, len(cards_to_export), self.theme, title="Exportar Resultado da Revisão")
         self.root.wait_window(dialog)
         
         if not dialog.result:
             return
         
         if dialog.result == "anki_apkg":
-            self._export_apkg(dialog.deck_name, self.review_cards_data)
+            self._export_apkg(dialog.deck_name, cards_to_export)
         else:
-            self._export_txt("anki" if dialog.result == "anki_txt" else "noji", self.review_cards_data)
+            self._export_txt("anki" if dialog.result == "anki_txt" else "noji", cards_to_export)
+        
+        # Atualizar status com info do que foi exportado
+        self._update_status(f"Exportado: {len(cards_to_export)} cards ({export_label})", "success")
+
     
     def _copiar_review(self):
         if not self.review_cards_data:
