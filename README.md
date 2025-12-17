@@ -5,6 +5,17 @@
 
 Gerador inteligente de flashcards para **Anki**, focado em **aprendizado cognitivo**, usando **IA** para criação, refinamento e revisão de cards.
 
+<div align="center">
+
+<img src="assets/images/ankilab-ui.png"
+     alt="AnkiLab – Interface principal"
+     width="900"/>
+
+<sub>Interface principal do AnkiLab</sub>
+
+</div>
+
+
 ---
 
 ## 🎯 Objetivo do Projeto
