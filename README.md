@@ -9,7 +9,7 @@ Gerador inteligente de flashcards para **Anki**, focado em **aprendizado cogniti
 
 <img src="assets/images/ankilab.png"
      alt="AnkiLab – Interface principal"
-     width="900"/>
+     width="600"/>
 
 <sub>Interface principal do AnkiLab</sub>
 
