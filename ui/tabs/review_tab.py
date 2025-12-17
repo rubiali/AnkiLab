@@ -10,12 +10,15 @@ import threading
 import tkinter as tk
 from tkinter import messagebox, filedialog
 from typing import Callable, List, Dict
+import os
 
 from config import MODEL_ADVANCED
 from ui.theme import NeuroTheme
 from ui.components.export_dialog import ExportDialog
 from core.api import review_deck
 from core.parser import (
+    parse_apkg_cards,
+    parse_flashcard_file,
     parse_csv_cards,
     format_cards_for_prompt,
     format_cards_for_export_tab,
@@ -145,7 +148,7 @@ class ReviewTab:
         )
     
     def _build_csv_loader(self, parent: tk.Frame):
-        """Constrói o botão e indicador de carregamento de CSV."""
+        """Constrói o botão e indicador de carregamento de arquivo."""
         tk.Label(
             parent, text="Arquivo:",
             font=self.theme.get_ui_font(8, "bold"),
@@ -155,13 +158,14 @@ class ReviewTab:
         load_frame = tk.Frame(parent, bg=self.theme.BG_SECONDARY)
         load_frame.pack(fill="x", pady=(0, 5))
         
+        # RENOMEADO: texto mais genérico
         self.btn_load_csv = tk.Button(
-            load_frame, text="  📁 Carregar CSV  ",
+            load_frame, text="  📁 Carregar Arquivo  ",
             font=self.theme.get_ui_font(8),
             bg=self.theme.ACCENT_SECONDARY, fg=self.theme.TEXT_PRIMARY,
             activebackground=self.theme.ACCENT_TERTIARY,
             relief="flat", cursor="hand2", padx=8, pady=4,
-            command=self._load_csv
+            command=self._load_file
         )
         self.btn_load_csv.pack(side="left")
         
@@ -171,7 +175,77 @@ class ReviewTab:
             bg=self.theme.BG_SECONDARY, fg=self.theme.TEXT_SECONDARY
         )
         self.loaded_label.pack(side="left", padx=(10, 0))
-    
+
+    def _load_file(self):
+        """Carrega um arquivo de flashcards (CSV, TXT ou APKG)."""
+        path = filedialog.askopenfilename(
+            filetypes=[
+                ("Todos Suportados", "*.apkg *.csv *.txt *.tsv"),
+                ("Pacote Anki", "*.apkg"),
+                ("CSV", "*.csv"),
+                ("Texto", "*.txt *.tsv"),
+                ("Todos", "*.*")
+            ],
+            title="Carregar arquivo de flashcards"
+        )
+        if not path:
+            return
+        
+        try:
+            # Usa a função unificada que detecta o formato
+            cards = parse_flashcard_file(path)
+            
+            if not cards:
+                ext = os.path.splitext(path)[1].lower()
+                if ext == '.apkg':
+                    msg = (
+                        "Não foi possível extrair cards do arquivo .apkg.\n\n"
+                        "Possíveis causas:\n"
+                        "• O deck pode estar vazio\n"
+                        "• Formato de nota incompatível (precisa ter 2+ campos)\n"
+                        "• Arquivo corrompido"
+                    )
+                else:
+                    msg = (
+                        "Não foi possível extrair cards do arquivo.\n"
+                        "Verifique o formato (2 colunas: pergunta, resposta)."
+                    )
+                messagebox.showerror("Erro", msg)
+                return
+            
+            self.loaded_csv_cards = cards
+            
+            # Detecta o tipo de arquivo para exibir
+            ext = os.path.splitext(path)[1].lower()
+            file_type = "APKG" if ext == ".apkg" else "CSV/TXT"
+            self.loaded_count_var.set(f"{len(cards)} cards ({file_type})")
+            
+            # Atualiza preview
+            self.loaded_preview.config(state="normal")
+            self.loaded_preview.delete("1.0", tk.END)
+            
+            preview_text = f"Fonte: {os.path.basename(path)}\n"
+            preview_text += f"Total: {len(cards)} cards\n\n"
+            
+            for i, c in enumerate(cards[:5]):
+                q_short = c['q'][:60] + "..." if len(c['q']) > 60 else c['q']
+                # Remove quebras de linha para preview compacto
+                q_short = q_short.replace('\n', ' ')
+                preview_text += f"{i+1}. {q_short}\n"
+            
+            if len(cards) > 5:
+                preview_text += f"\n... e mais {len(cards) - 5} cards"
+            
+            self.loaded_preview.insert("1.0", preview_text)
+            self.loaded_preview.config(state="disabled")
+            
+            self.update_status(f"Arquivo carregado: {len(cards)} cards", "success")
+            
+        except FileNotFoundError:
+            messagebox.showerror("Erro", "Arquivo não encontrado.")
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao carregar arquivo:\n{str(e)}")
+
     def _build_review_mode_selector(self, parent: tk.Frame):
         """Constrói o seletor de modo de revisão."""
         tk.Label(

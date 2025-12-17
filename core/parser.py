@@ -10,6 +10,247 @@ import re
 import csv
 from io import StringIO
 from typing import List, Dict, Optional
+import zipfile
+import sqlite3
+import tempfile
+import os
+
+def parse_apkg_cards_detailed(file_path: str) -> tuple[List[Dict[str, str]], Dict]:
+    """
+    Extrai flashcards e metadados de um arquivo .apkg.
+    
+    Returns:
+        Tuple com (lista de cards, dicionário de metadados).
+    """
+    cards = []
+    metadata = {
+        "deck_name": "Desconhecido",
+        "note_types": set(),
+        "total_notes": 0,
+        "tags": set()
+    }
+    
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with zipfile.ZipFile(file_path, 'r') as zip_ref:
+                zip_ref.extractall(temp_dir)
+            
+            db_path = None
+            for db_name in ['collection.anki2', 'collection.anki21']:
+                potential = os.path.join(temp_dir, db_name)
+                if os.path.exists(potential):
+                    db_path = potential
+                    break
+            
+            if not db_path:
+                return [], metadata
+            
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            try:
+                # Extrai nome do deck da tabela col
+                cursor.execute("SELECT decks FROM col")
+                decks_json = cursor.fetchone()
+                if decks_json:
+                    import json
+                    decks = json.loads(decks_json[0])
+                    # Pega o primeiro deck que não é "Default"
+                    for deck_id, deck_info in decks.items():
+                        name = deck_info.get('name', '')
+                        if name and name != 'Default':
+                            metadata["deck_name"] = name
+                            break
+                
+                # Extrai tipos de nota
+                cursor.execute("SELECT models FROM col")
+                models_json = cursor.fetchone()
+                if models_json:
+                    import json
+                    models = json.loads(models_json[0])
+                    for model_id, model_info in models.items():
+                        metadata["note_types"].add(model_info.get('name', 'Unknown'))
+                
+                # Extrai notas com tags
+                cursor.execute("SELECT flds, tags FROM notes")
+                rows = cursor.fetchall()
+                metadata["total_notes"] = len(rows)
+                
+                for flds, tags in rows:
+                    fields = flds.split('\x1f')
+                    
+                    # Coleta tags
+                    if tags:
+                        for tag in tags.strip().split():
+                            metadata["tags"].add(tag)
+                    
+                    if len(fields) >= 2:
+                        q = _clean_html(fields[0].strip())
+                        a = _clean_html(fields[1].strip())
+                        
+                        if q and a:
+                            cards.append({"q": q, "a": a})
+                
+            finally:
+                conn.close()
+        
+        # Converte sets para listas para serialização
+        metadata["note_types"] = list(metadata["note_types"])
+        metadata["tags"] = list(metadata["tags"])
+        
+        return cards, metadata
+        
+    except Exception as e:
+        print(f"[parse_apkg_cards_detailed] Erro: {e}")
+        return [], metadata
+
+
+def parse_apkg_cards(file_path: str) -> List[Dict[str, str]]:
+    """
+    Extrai flashcards de um arquivo .apkg do Anki.
+    
+    O formato .apkg é um ZIP contendo um banco SQLite com as notas.
+    Os campos estão na tabela 'notes', coluna 'flds', separados por \\x1f.
+    
+    Args:
+        file_path: Caminho do arquivo .apkg.
+    
+    Returns:
+        Lista de dicionários com chaves 'q' e 'a'.
+    """
+    cards = []
+    
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # .apkg é um arquivo ZIP
+            with zipfile.ZipFile(file_path, 'r') as zip_ref:
+                zip_ref.extractall(temp_dir)
+            
+            # Localiza o banco SQLite (pode ser .anki2 ou .anki21)
+            db_path = None
+            for db_name in ['collection.anki2', 'collection.anki21']:
+                potential = os.path.join(temp_dir, db_name)
+                if os.path.exists(potential):
+                    db_path = potential
+                    break
+            
+            if not db_path:
+                print("[parse_apkg_cards] Banco SQLite não encontrado no .apkg")
+                return []
+            
+            # Conecta e extrai notas
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            try:
+                # Extrai campos das notas
+                # flds contém todos os campos separados por \x1f (unit separator)
+                cursor.execute("SELECT flds FROM notes")
+                rows = cursor.fetchall()
+                
+                for row in rows:
+                    fields = row[0].split('\x1f')
+                    
+                    if len(fields) >= 2:
+                        q = _clean_html(fields[0].strip())
+                        a = _clean_html(fields[1].strip())
+                        
+                        if q and a:
+                            cards.append({"q": q, "a": a})
+                
+            finally:
+                conn.close()
+        
+        return cards
+        
+    except zipfile.BadZipFile:
+        print("[parse_apkg_cards] Arquivo não é um ZIP válido")
+        return []
+    except sqlite3.Error as e:
+        print(f"[parse_apkg_cards] Erro SQLite: {e}")
+        return []
+    except Exception as e:
+        print(f"[parse_apkg_cards] Erro: {type(e).__name__}: {e}")
+        return []
+
+
+def _clean_html(text: str) -> str:
+    """
+    Remove tags HTML e limpa o texto extraído do Anki.
+    
+    Args:
+        text: Texto com possíveis tags HTML.
+    
+    Returns:
+        Texto limpo.
+    """
+    if not text:
+        return ""
+    
+    # Remove tags HTML
+    text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'<div[^>]*>', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'</div>', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'<[^>]+>', '', text)
+    
+    # Decodifica entidades HTML comuns
+    html_entities = {
+        '&nbsp;': ' ',
+        '&lt;': '<',
+        '&gt;': '>',
+        '&amp;': '&',
+        '&quot;': '"',
+        '&#39;': "'",
+        '&apos;': "'",
+    }
+    for entity, char in html_entities.items():
+        text = text.replace(entity, char)
+    
+    # Remove espaços extras mantendo quebras de linha
+    lines = [line.strip() for line in text.split('\n')]
+    text = '\n'.join(line for line in lines if line)
+    
+    return text.strip()
+
+
+def parse_flashcard_file(file_path: str) -> List[Dict[str, str]]:
+    """
+    Função unificada para carregar flashcards de qualquer formato suportado.
+    
+    Detecta automaticamente o formato pelo extensão e conteúdo.
+    
+    Args:
+        file_path: Caminho do arquivo (.apkg, .csv, .txt).
+    
+    Returns:
+        Lista de dicionários com chaves 'q' e 'a'.
+    
+    Raises:
+        ValueError: Se o formato não for suportado.
+        FileNotFoundError: Se o arquivo não existir.
+    """
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"Arquivo não encontrado: {file_path}")
+    
+    ext = os.path.splitext(file_path)[1].lower()
+    
+    if ext == '.apkg':
+        return parse_apkg_cards(file_path)
+    elif ext in ['.csv', '.txt', '.tsv']:
+        return parse_csv_cards(file_path=file_path)
+    else:
+        # Tenta detectar pelo conteúdo
+        try:
+            # Verifica se é um ZIP (possível .apkg renomeado)
+            with zipfile.ZipFile(file_path, 'r') as zf:
+                names = zf.namelist()
+                if any('anki' in n.lower() for n in names):
+                    return parse_apkg_cards(file_path)
+        except zipfile.BadZipFile:
+            pass
+        
+        # Tenta como texto
+        return parse_csv_cards(file_path=file_path)
 
 
 def parse_cards(raw: str) -> List[Dict[str, str]]:
