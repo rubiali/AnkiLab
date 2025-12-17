@@ -147,7 +147,7 @@ class ReviewTab:
     def _build_csv_loader(self, parent: tk.Frame):
         """Constrói o botão e indicador de carregamento de CSV."""
         tk.Label(
-            parent, text="Arquivo CSV:",
+            parent, text="Arquivo:",
             font=self.theme.get_ui_font(8, "bold"),
             bg=self.theme.BG_SECONDARY, fg=self.theme.TEXT_PRIMARY, anchor="w"
         ).pack(fill="x", pady=(5, 4))
@@ -478,7 +478,7 @@ class ReviewTab:
    ╭──────────────────────────────────╮
    │                                  │
    │   1. Informe o tema/assunto      │
-   │   2. Carregue um arquivo CSV     │
+   │   2. Carregue um arquivo         │
    │   3. Escolha o modo de revisão   │
    │   4. Clique em EXECUTAR REVISÃO  │
    │                                  │
@@ -507,7 +507,7 @@ class ReviewTab:
     # ==========================================================================
     
     def _load_csv(self):
-        """Carrega um arquivo CSV de flashcards."""
+        """Carrega um arquivo de flashcards."""
         path = filedialog.askopenfilename(
             filetypes=[("CSV", "*.csv"), ("Texto", "*.txt"), ("Todos", "*.*")],
             title="Carregar arquivo de flashcards"
@@ -557,7 +557,7 @@ class ReviewTab:
             return
         
         if not self.loaded_csv_cards:
-            messagebox.showerror("Erro", "Carregue um arquivo CSV primeiro.")
+            messagebox.showerror("Erro", "Carregue um arquivo primeiro.")
             return
         
         mode = self.review_mode_var.get()
