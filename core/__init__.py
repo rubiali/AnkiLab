@@ -10,6 +10,8 @@ from .api import generate_cards, refine_cards, review_deck
 from .parser import (
     parse_cards,
     parse_csv_cards,
+    parse_apkg_cards,
+    parse_flashcard_file,
     format_cards_for_export_tab,
     format_cards_for_prompt,
     format_cards_for_refine,
@@ -24,6 +26,8 @@ __all__ = [
     "review_deck",
     "parse_cards",
     "parse_csv_cards",
+    "parse_apkg_cards",
+    "parse_flashcard_file",
     "format_cards_for_export_tab",
     "format_cards_for_prompt",
     "format_cards_for_refine",

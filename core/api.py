@@ -4,10 +4,14 @@ Integração com API OpenAI
 =========================
 
 Funções para comunicação com a API de IA para geração e revisão de flashcards.
+
+COMPATIBILIDADE:
+- GPT-5 Family: usa Responses API (client.responses.create)
+- GPT-4 Family: usa Chat Completions API (client.chat.completions.create)
 """
 
 from string import Template
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 
 from config import (
     get_openai_client,
@@ -19,15 +23,147 @@ from config import (
     REFINE_PROMPT,
     PROMPT_AUDIT,
     PROMPT_FINAL_REVIEW,
-)
-from config.settings import (
+    is_gpt5_model,
+    # Parâmetros GPT-4
     GENERATION_TEMPERATURE,
     REFINEMENT_TEMPERATURE,
     REVIEW_TEMPERATURE,
     MAX_TOKENS_GENERATION,
     MAX_TOKENS_REVIEW,
+    # Parâmetros GPT-5
+    REASONING_EFFORT_GENERATION,
+    REASONING_EFFORT_REFINEMENT,
+    REASONING_EFFORT_REVIEW,
+    VERBOSITY_GENERATION,
+    VERBOSITY_REFINEMENT,
+    VERBOSITY_REVIEW,
+    MAX_OUTPUT_TOKENS_GENERATION,
+    MAX_OUTPUT_TOKENS_REFINEMENT,
+    MAX_OUTPUT_TOKENS_REVIEW,
 )
 from .parser import parse_cards, format_cards_for_refine
+
+
+def _call_gpt5_responses_api(
+    client,
+    model: str,
+    instructions: str,
+    user_input: str,
+    reasoning_effort: str = "low",
+    verbosity: str = "medium",
+    max_output_tokens: int = 15000,
+) -> str:
+    """
+    Chama GPT-5 usando a Responses API.
+    
+    Args:
+        client: Cliente OpenAI.
+        model: Nome do modelo GPT-5.
+        instructions: Instruções do sistema.
+        user_input: Input do usuário.
+        reasoning_effort: Nível de raciocínio ("none", "low", "medium", "high").
+        verbosity: Nível de verbosidade ("low", "medium", "high").
+        max_output_tokens: Máximo de tokens na resposta.
+    
+    Returns:
+        Texto da resposta.
+    """
+    response = client.responses.create(
+        model=model,
+        instructions=instructions,
+        input=user_input,
+        reasoning={"effort": reasoning_effort},
+        text={"verbosity": verbosity},
+        max_output_tokens=max_output_tokens,
+    )
+    
+    return response.output_text or ""
+
+
+def _call_gpt4_chat_completions_api(
+    client,
+    model: str,
+    system_prompt: str,
+    user_message: str,
+    temperature: float = 0.3,
+    max_tokens: int = 15000,
+) -> str:
+    """
+    Chama GPT-4 usando a Chat Completions API.
+    
+    Args:
+        client: Cliente OpenAI.
+        model: Nome do modelo GPT-4.
+        system_prompt: Prompt do sistema.
+        user_message: Mensagem do usuário.
+        temperature: Temperatura de sampling.
+        max_tokens: Máximo de tokens na resposta.
+    
+    Returns:
+        Texto da resposta.
+    """
+    response = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message},
+        ],
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
+    
+    return (response.choices[0].message.content or "").strip()
+
+
+def _call_openai(
+    model: str,
+    system_prompt: str,
+    user_message: str,
+    # Parâmetros GPT-4
+    temperature: float = 0.3,
+    max_tokens: int = 15000,
+    # Parâmetros GPT-5
+    reasoning_effort: str = "low",
+    verbosity: str = "medium",
+    max_output_tokens: int = 15000,
+) -> str:
+    """
+    Função unificada que roteia para a API correta baseado no modelo.
+    
+    Args:
+        model: Nome do modelo.
+        system_prompt: Prompt do sistema (instructions para GPT-5).
+        user_message: Mensagem do usuário (input para GPT-5).
+        temperature: Temperatura (GPT-4 only).
+        max_tokens: Máximo de tokens (GPT-4 only).
+        reasoning_effort: Esforço de raciocínio (GPT-5 only).
+        verbosity: Verbosidade (GPT-5 only).
+        max_output_tokens: Máximo de tokens de saída (GPT-5 only).
+    
+    Returns:
+        Texto da resposta.
+    """
+    client = get_openai_client()
+    
+    if is_gpt5_model(model):
+        return _call_gpt5_responses_api(
+            client=client,
+            model=model,
+            instructions=system_prompt,
+            user_input=user_message,
+            reasoning_effort=reasoning_effort,
+            verbosity=verbosity,
+            max_output_tokens=max_output_tokens,
+        )
+    else:
+        return _call_gpt4_chat_completions_api(
+            client=client,
+            model=model,
+            system_prompt=system_prompt,
+            user_message=user_message,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
 
 
 def generate_cards(
@@ -49,8 +185,6 @@ def generate_cards(
     Raises:
         RuntimeError: Se não conseguir extrair cards da resposta.
     """
-    client = get_openai_client()
-    
     # Determina o modo de geração
     modo = "AUTOMÁTICO" if quantidade.upper() == "AUTO" else "MANUAL"
     
@@ -62,15 +196,20 @@ def generate_cards(
         TEXTO=texto
     )
     
-    # Chamada à API
-    response = client.chat.completions.create(
+    # Chamada à API (roteamento automático)
+    raw_content = _call_openai(
         model=MODEL_NAME,
-        messages=[{"role": "user", "content": prompt}],
+        system_prompt=prompt,
+        user_message=texto,
+        # Parâmetros GPT-4
         temperature=GENERATION_TEMPERATURE,
-        max_tokens=MAX_TOKENS_GENERATION
+        max_tokens=MAX_TOKENS_GENERATION,
+        # Parâmetros GPT-5
+        reasoning_effort=REASONING_EFFORT_GENERATION,
+        verbosity=VERBOSITY_GENERATION,
+        max_output_tokens=MAX_OUTPUT_TOKENS_GENERATION,
     )
     
-    raw_content = (response.choices[0].message.content or "").strip()
     cards = parse_cards(raw_content)
     
     if not cards:
@@ -98,8 +237,6 @@ def refine_cards(
     if not cards:
         return cards
     
-    client = get_openai_client()
-    
     # Formata os cards para o prompt
     cards_text = format_cards_for_refine(cards)
     dificuldade = "HARD" if hard_mode else "NORMAL"
@@ -110,14 +247,20 @@ def refine_cards(
         CARDS=cards_text
     )
     
-    response = client.chat.completions.create(
+    # Chamada à API (roteamento automático)
+    raw_content = _call_openai(
         model=MODEL_REFINEMENT,
-        messages=[{"role": "user", "content": prompt}],
+        system_prompt=prompt,
+        user_message=cards_text,
+        # Parâmetros GPT-4
         temperature=REFINEMENT_TEMPERATURE,
-        max_tokens=MAX_TOKENS_GENERATION
+        max_tokens=MAX_TOKENS_GENERATION,
+        # Parâmetros GPT-5
+        reasoning_effort=REASONING_EFFORT_REFINEMENT,
+        verbosity=VERBOSITY_REFINEMENT,
+        max_output_tokens=MAX_OUTPUT_TOKENS_REFINEMENT,
     )
     
-    raw_content = (response.choices[0].message.content or "").strip()
     refined = parse_cards(raw_content)
     
     # Retorna refinados apenas se manteve pelo menos 50% dos cards
@@ -144,8 +287,6 @@ def review_deck(
     Returns:
         Resposta completa da IA (não parseada).
     """
-    client = get_openai_client()
-    
     # Seleciona o prompt apropriado
     if mode == "audit":
         prompt_template = PROMPT_AUDIT
@@ -157,11 +298,16 @@ def review_deck(
         CARDS=cards_text
     )
     
-    response = client.chat.completions.create(
+    # Chamada à API (roteamento automático)
+    return _call_openai(
         model=MODEL_ADVANCED,
-        messages=[{"role": "user", "content": prompt}],
+        system_prompt=prompt,
+        user_message=cards_text,
+        # Parâmetros GPT-4
         temperature=REVIEW_TEMPERATURE,
-        max_tokens=MAX_TOKENS_REVIEW
+        max_tokens=MAX_TOKENS_REVIEW,
+        # Parâmetros GPT-5
+        reasoning_effort=REASONING_EFFORT_REVIEW,
+        verbosity=VERBOSITY_REVIEW,
+        max_output_tokens=MAX_OUTPUT_TOKENS_REVIEW,
     )
-    
-    return (response.choices[0].message.content or "").strip()
