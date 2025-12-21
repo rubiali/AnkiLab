@@ -393,13 +393,23 @@ def parse_csv_cards(
             return []
         
         # Detecta o delimitador
-        first_line = content.split('\n')[0]
-        if '\t' in first_line:
-            delimiter = '\t'
-        elif ';' in first_line:
-            delimiter = ';'
-        else:
-            delimiter = ','
+        sample = "\n".join(content.splitlines()[:5]) or content
+        try:
+            dialect = csv.Sniffer().sniff(sample, delimiters=[',', ';', '\t'])
+            delimiter = dialect.delimiter
+        except Exception:
+            # Fallback manual: conta delimitadores fora de aspas
+            counts = {',': 0, ';': 0, '\t': 0}
+            in_quotes = False
+            for ch in sample:
+                if ch == '"':
+                    in_quotes = not in_quotes
+                elif not in_quotes and ch in counts:
+                    counts[ch] += 1
+            if counts['\t'] > 0:
+                delimiter = '\t'
+            else:
+                delimiter = ',' if counts[','] >= counts[';'] else ';'
         
         reader = csv.reader(StringIO(content), delimiter=delimiter)
         
